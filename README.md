@@ -25,11 +25,14 @@ firmware that _consume_ this library) — lives at
   placement frame, closure gaps, Darboux lift (κ_g, κₙ, τ_g) for robots.
 - `demos/particles/` — **Demo D1**: particles on any mesh (drop an .obj/.stl),
   forces along the surface, annealing, trails, connections, colour by what
-  each particle reads.
-- `demos/imprint/` — **Demo D2**: text / SVG drawn on any mesh in the four
+  each particle reads; "forces off" + shift-click = a free particle tracing a geodesic.
+- `demos/imprint/` — **Demo D2**: text / SVG / L-system fractals drawn on any mesh in the four
   imprint modes, movable frame, closure gaps, Darboux/OBJ export.
+- `demos/life/` — Game of Life on a cylinder / torus / Möbius band / Klein bottle;
+  neighbours derived from the mesh (`cellAdjacency`).
   Run `python3 -m http.server 8001` from the repo root and open
-  `http://localhost:8001/demos/particles/` or `.../demos/imprint/`.
+  `http://localhost:8001/demos/particles/`, `.../demos/imprint/` or `.../demos/life/`.
+- Projects that will build on this library (each in its own repo): `docs/PROJECTS_USING_THE_LIBRARY.md`.
 - `tests/` — `node tests/run.mjs` (Node selftests + the lab selftest).
 - `firmware-lib/` — the hardware display layer (`cube_display`): virtual
   layered displays, LED/emitter mapping, and cube topology with precomputed

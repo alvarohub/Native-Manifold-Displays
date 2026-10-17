@@ -501,7 +501,8 @@ export function tetrahedronMesh(size = 1) {
 
 // Möbius band: strip of width w around a circle of radius R with `halfTwists` half-turns (1 = Möbius,
 // non-orientable with one boundary; 0 = cylinder; 2 = orientable twisted annulus). Open surface.
-// Intrinsically it is (almost) flat — the natural home for turtle imprints and for a one-sided score.
+// Not developable: K ≈ −1/(4R²) on the centreline (a flat paper band is a different embedding, Sadowsky 1930).
+// Triangles come in quad pairs: cell (i, j) = triangles 2(i·nv + j) and +1 (same for torusMesh).
 export function mobiusBandMesh(R = 1.0, w = 0.5, nu = 96, nv = 8, halfTwists = 1) {
   const positions = [];
   for (let i = 0; i < nu; i++) {
@@ -563,3 +564,25 @@ export function kleinBottleMesh(R = 1.0, r = 0.4, nu = 64, nv = 24) {
   }
   return { positions, triangles };
 }
+
+// Cell graph of a mesh partitioned into cells (cellOfTriangle[t] = cell id): two cells are neighbours when
+// they share a vertex ('vertex', = Moore/8-neighbourhood on a quad grid) or an edge ('edge', = von Neumann/4).
+// Topology comes from shared vertex ids only, so seams/twists (torus, Möbius, Klein) need no special case,
+// and irregular partitions (Voronoi cells of relaxed particles) get their irregular neighbourhoods for free.
+export function cellAdjacency(mesh, cellOfTriangle, { by = 'vertex' } = {}) {
+  const nCells = Math.max(...cellOfTriangle) + 1;
+  const sets = Array.from({ length: nCells }, () => new Set());
+  const owners = new Map();
+  mesh.triangles.forEach((tri, t) => {
+    const keys = by === 'edge' ? [0, 1, 2].map((k) => edgeKey(tri[k], tri[(k + 1) % 3])) : tri;
+    for (const key of keys) {
+      let s = owners.get(key);
+      if (!s) owners.set(key, (s = new Set()));
+      s.add(cellOfTriangle[t]);
+    }
+  });
+  for (const s of owners.values()) for (const a of s) for (const b of s) if (a !== b) sets[a].add(b);
+  return sets.map((s) => [...s]);
+}
+
+const edgeKey = (a, b) => (a < b ? `${a},${b}` : `${b},${a}`);

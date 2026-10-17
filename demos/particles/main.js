@@ -54,6 +54,8 @@ const ui = {
   panel: $('panel'),
   collapse: $('collapse'),
   loadMesh: $('loadMesh'),
+  freeMode: $('freeMode'),
+  clearAll: $('clearAll'),
 };
 const bindRange = (input, fmt = (v) => v) => {
   const out = $(input.id + 'Out');
@@ -298,28 +300,57 @@ function rebuildParticles() {
   rebuildTrails();
 }
 
+// Drop one particle at a 3D hit, initial velocity = the screen's horizontal projected onto the face.
+const FREE_TRAIL = 2000;
+const DROPPED = new THREE.Color(0xffd27b);
+function dropParticle(hit) {
+  if (sys.particles.length >= MAX_N) return;
+  const f = surface.faceById(hit.faceId);
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  let v = [
+    right.x * f.u[0] + right.y * f.u[1] + right.z * f.u[2],
+    right.x * f.v[0] + right.y * f.v[1] + right.z * f.v[2],
+  ];
+  const len = Math.hypot(v[0], v[1]) || 1;
+  const speed = Math.max(1, parseFloat(ui.speed.value));
+  v = [(v[0] / len) * speed, (v[1] / len) * speed];
+  sys.trailLength = Math.max(sys.trailLength, FREE_TRAIL);
+  sys.add({ faceId: hit.faceId, x: hit.x, y: hit.y }, v, { read: 0, dropped: true });
+  particleMesh.count = sys.particles.length;
+  addTrailLine(FREE_TRAIL);
+}
+
+function addTrailLine(len) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(len * 3), 3));
+  geo.setDrawRange(0, 0);
+  const line = new THREE.Line(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: parseFloat(ui.trailOpacity.value) }),
+  );
+  line.frustumCulled = false;
+  scene.add(line);
+  trailLines.push(line);
+}
+
 function rebuildTrails() {
   for (const l of trailLines) scene.remove(l);
   trailLines = [];
   if (!ui.trails.checked) return;
   const len = parseInt(ui.trailLen.value, 10);
-  for (const p of sys.particles) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(len * 3), 3));
-    geo.setDrawRange(0, 0);
-    const line = new THREE.Line(
-      geo,
-      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: parseFloat(ui.trailOpacity.value) }),
-    );
-    line.frustumCulled = false;
-    scene.add(line);
-    trailLines.push(line);
-  }
+  for (const p of sys.particles) addTrailLine(len);
 }
 
 function applyForces() {
   if (pair) sys.removeForce(pair);
   if (gravityForce) sys.removeForce(gravityForce);
+  pair = gravityForce = null;
+  if (ui.freeMode.checked) {
+    // no force, no drag, no noise: each step is a straight line in a flat chart = a geodesic
+    sys.drag = 0;
+    sys.temperature = 0;
+    return;
+  }
   const strength = parseFloat(ui.repel.value);
   pair =
     strength > 0 ? sys.addForce(pairForce({ radius: parseFloat(ui.radius.value), strength, law: ui.law.value })) : null;
@@ -444,10 +475,11 @@ function renderParticles() {
     if (line) {
       const attr = line.geometry.getAttribute('position');
       const t = p.trail;
-      for (let k = 0; k < t.length; k++) attr.setXYZ(k, t[k][0], t[k][1], t[k][2]);
+      const k0 = Math.max(0, t.length - attr.count);
+      for (let k = k0; k < t.length; k++) attr.setXYZ(k - k0, t[k][0], t[k][1], t[k][2]);
       attr.needsUpdate = true;
-      line.geometry.setDrawRange(0, t.length);
-      line.material.color.copy(tmpColor);
+      line.geometry.setDrawRange(0, t.length - k0);
+      line.material.color.copy(p.dropped ? DROPPED : tmpColor);
     }
   });
   particleMesh.instanceMatrix.needsUpdate = true;
@@ -533,6 +565,25 @@ for (const el of [ui.repel, ui.law, ui.radius, ui.drag, ui.gravity, ui.temp]) el
 ui.anneal.onclick = () => {
   annealing = { start: performance.now(), duration: 8000, T0: Math.max(0.6, parseFloat(ui.temp.value)) };
 };
+ui.freeMode.onchange = applyForces;
+ui.clearAll.onclick = () => {
+  sys.clear();
+  particleMesh.count = 0;
+  for (const l of trailLines) scene.remove(l);
+  trailLines = [];
+};
+const raycaster = new THREE.Raycaster();
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (!e.shiftKey) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  raycaster.setFromCamera(
+    new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1),
+    camera,
+  );
+  const { origin, direction } = raycaster.ray;
+  const hit = surface.raycast([origin.x, origin.y, origin.z], [direction.x, direction.y, direction.z]);
+  if (hit) dropParticle(hit);
+});
 
 // file import (button or drag & drop) through the library's importMesh
 wireMeshImport({

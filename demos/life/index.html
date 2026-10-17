@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Game of Life on a surface — Native Manifold Displays</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0d12;
+        color: #d8dde6;
+        overflow: hidden;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      #app canvas {
+        display: block;
+        touch-action: none;
+      }
+      .panel {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 300px;
+        max-height: calc(100% - 24px);
+        overflow-y: auto;
+        background: rgba(14, 18, 26, 0.88);
+        border: 1px solid #2a3140;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 13px;
+        backdrop-filter: blur(6px);
+      }
+      .panel.collapsed > *:not(.head) {
+        display: none;
+      }
+      .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .head h1 {
+        font-size: 15px;
+        margin: 0 0 6px;
+        font-weight: 600;
+      }
+      .head button {
+        background: none;
+        border: 1px solid #3a4356;
+        color: #aab3c2;
+        border-radius: 6px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 1px solid #2a3140;
+        border-radius: 8px;
+        margin: 10px 0;
+        padding: 8px 10px;
+      }
+      legend {
+        color: #9fb3d9;
+        padding: 0 4px;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 92px 1fr 40px;
+        gap: 8px;
+        align-items: center;
+        margin: 5px 0;
+      }
+      .row label {
+        color: #aab3c2;
+      }
+      .row output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .row select,
+      .row input[type='text'] {
+        grid-column: 2 / 4;
+        background: #121722;
+        color: #e6ebf2;
+        border: 1px solid #2a3140;
+        border-radius: 6px;
+        padding: 3px 6px;
+        font: inherit;
+      }
+      .row.check {
+        grid-template-columns: 1fr auto;
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .buttons button {
+        background: #1a2230;
+        color: #e6ebf2;
+        border: 1px solid #2f3a4e;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      .buttons button.on {
+        background: #2b5fd9;
+        border-color: #4a7df0;
+      }
+      .readout {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11.5px;
+        color: #9fb3d9;
+        white-space: pre-wrap;
+        line-height: 1.45;
+      }
+      .hint {
+        color: #7f8a9c;
+        font-size: 11.5px;
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <section id="panel" class="panel">
+      <div class="head">
+        <h1>Game of Life on a surface</h1>
+        <button id="collapse" title="collapse panel">–</button>
+      </div>
+      <fieldset>
+        <legend>Universe</legend>
+        <div class="row">
+          <label for="surf">surface</label
+          ><select id="surf">
+            <option value="mobius" selected>Möbius band</option>
+            <option value="cylinder">cylinder</option>
+            <option value="torus">torus</option>
+            <option value="klein">Klein bottle</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="nu">cells around</label
+          ><input id="nu" type="range" min="12" max="160" step="2" value="80" /><output id="nuOut"></output>
+        </div>
+        <div class="row">
+          <label for="nv">cells across</label><input id="nv" type="range" min="4" max="48" step="1" value="14" /><output
+            id="nvOut"
+          ></output>
+        </div>
+        <div class="row">
+          <label for="nbh">neighbours</label
+          ><select id="nbh">
+            <option value="vertex" selected>share a corner (Moore, 8)</option>
+            <option value="edge">share an edge (von Neumann, 4)</option>
+          </select>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Rule & seed</legend>
+        <div class="row"><label for="rule">rule</label><input id="rule" type="text" value="B3/S23" /></div>
+        <div class="row">
+          <label for="seed">seed</label
+          ><select id="seed">
+            <option value="lwss" selected>spaceship (watch it come back mirrored)</option>
+            <option value="glider">glider</option>
+            <option value="rpentomino">R-pentomino</option>
+            <option value="random">random 30%</option>
+            <option value="empty">empty</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="speed">gen / s</label
+          ><input id="speed" type="range" min="1" max="60" step="1" value="12" /><output id="speedOut"></output>
+        </div>
+        <div class="buttons">
+          <button id="run" class="on">running</button>
+          <button id="stepOnce">step</button>
+          <button id="reset">reset</button>
+        </div>
+        <div class="row check"><label for="grid">cell borders</label><input id="grid" type="checkbox" checked /></div>
+        <div class="hint">
+          click a cell to toggle it. The neighbourhood comes from the mesh (shared vertices), so the Möbius twist and
+          the rim (5 neighbours) need no special code.
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Readout</legend>
+        <div class="readout" id="readout"></div>
+      </fieldset>
+    </section>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

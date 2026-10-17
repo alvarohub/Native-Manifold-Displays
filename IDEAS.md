@@ -224,10 +224,12 @@ a vector carried around a vertex returning rotated (holonomy dial).
 
 ## 7. Möbius band presets + L-systems (Oct 2026)
 
-- **Möbius band for music** (Alvaro: "the moebius band could work very well for music") — link to
-  MoebiusHumanEqualizer/moebiusElasticPamelBand_5. A head running along the band returns on the _other side_
-  after one turn and home after two: a natural 2:1 period / mirror-voice structure. `mobiusBandMesh(R, w, nu,
-  nv, halfTwists)` in core; presets "Möbius" and "Möbius (3 half-twists)" in the demos.
+- **Möbius band for music** (Alvaro: "the moebius band could work very well for music"). The Möbius Human
+  Equalizer (`moebiusElasticPamelBand_5` lineage) is its **own project in its own repo**; it will import this
+  library. Here we only keep the shape presets and demos. A head running along the band returns on the
+  other side after one turn and home after two: a natural 2:1 period / mirror-voice structure.
+  `mobiusBandMesh(R, w, nu, nv, halfTwists)` in core; presets "Möbius" and "Möbius (3 half-twists)" in the demos.
+  See docs/PROJECTS_USING_THE_LIBRARY.md.
 - **Geometry (verified)**: the standard parametrisation is NOT developable — K ≈ −1/(4R²) on the centreline,
   more negative at the rim. A flat paper band is a different embedding (Sadowsky 1930; Starostin & van der
   Heijden, Nature Materials 2007) → candidate "paper Möbius" preset.
@@ -237,3 +239,34 @@ a vector carried around a vertex returning rotated (holonomy dial).
 - **L-systems = native turtle programs** (`LSYSTEMS`, `lsystemContours` in manifold-ink): koch, snowflake,
   dragon, hilbert, gosper, sierpinski, plant, bush. On a curved surface the same program draws a different
   fractal (holonomy accumulates per turn). Imprint demo source "L-system", vertices kept exact.
+
+## 8. Game of Life on a surface (Alvaro, 2026-10-17)
+
+**Built (demos/life)**: a rectangular global grid wrapped on a cylinder, torus, Möbius band or Klein bottle.
+Neighbours come from the mesh (`cellAdjacency`: cells sharing a vertex = Moore 8, sharing an edge = von
+Neumann 4). So the twist needs no special code, and the rim cells have 5 neighbours. Verified: on the Möbius
+band a lightweight spaceship comes back **mirror-imaged** (row j → nv−1−j) after one loop and identical after
+two (test `life.test.mjs`). Chirality is a real, visible state here.
+
+**Noted, not built:**
+
+- **Relaxed tessellation as the universe.** Put N repelling particles on any surface (demos/particles
+  already does this), let them settle (anneal), then freeze them as cell sites. Cell = Voronoi region of each
+  site (on/off = the region lights up, much better than a sphere). Neighbours = Delaunay neighbours, which
+  `cellAdjacency` can provide once the surface is partitioned by Voronoi cells.
+- **The neighbourhood is no longer 8.** A relaxed point set is mostly hexagonal (6 neighbours), and topology
+  forces defects: Euler gives Σ(6 − nᵢ) = 6χ, so a sphere carries net 12 "pentagons" (5-neighbour cells).
+  Torus: possibly zero. Life therefore *feels the curvature*: the defects sit where K concentrates, and
+  the rule behaves differently there. Curvature becomes visible in the dynamics (link with §2).
+- **Which rules?**
+  - Hexagonal Life literature: e.g. B2/S34 on the hex grid (Bays, "Cellular automata in the triangular
+    tessellation" / hexagonal Life, 1987–2005) to look up.
+  - For irregular degrees, count-based rules break, because "3 of 5" ≠ "3 of 7". Use fraction-based
+    (totalistic, normalised) rules instead: born if the live fraction is in [a, b], survive if in [c, d].
+  - Or continuous Life (SmoothLife, Rafler 2011; Lenia, Chan 2019). These are defined by area integrals,
+    so they are metric-native. A natural fit for a surface with geodesic disks (`develop`).
+- **Life as a score (Cube Carillon).** The armed-cell pattern of the sequencer evolves as a CA, one generation
+  per bar. Heads read the current pattern. The score composes itself; gliders become travelling motifs, and
+  on the Möbius band they return mirrored (inversion / retrograde in musical terms?).
+- **Möbius + music** (Equalizer project): a CA on the band where the across-band coordinate is pitch. A
+  glider coming back mirrored = the melody inverted. Belongs to that project's repo.
