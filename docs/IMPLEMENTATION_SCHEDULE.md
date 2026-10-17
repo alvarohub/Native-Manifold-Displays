@@ -163,7 +163,7 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       `meanCurvature` (Steiner Σℓθ/4A), `faceCurvatureTensors` +
       `curvatureTensor` (Rusinkiewicz least squares, corner-angle averaging in
       vertex frames, principal curvatures/directions), `curvatureAt(point,
-  dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
+dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
       `src/fields.js`: `VertexField` (barycentric sample, exact per-face
       gradient, umbrella smoothing), `FaceField`, `vertexNeighbours`. Convex
       = positive. Verified (6 tests, 31 total): icosphere K≈1/r², H≈1/r,

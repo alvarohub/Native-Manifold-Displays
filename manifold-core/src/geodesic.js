@@ -350,4 +350,33 @@ export function distance(surface, a, b, opts) {
   return l ? l.distance : Infinity;
 }
 
+// Geodesic from a to b by shooting: start from the logMap guess, measure the miss at the endpoint with a
+// local logMap, transport it back into a's frame through the trace's Mᵀ, correct direction and length,
+// repeat. The disk's single unfolding per face makes the first guess miss by O(K·area); this converges
+// to the straightest geodesic actually ending at b (within tol) in a few steps away from cone points.
+// Returns the trace result plus { miss, iterations } or null if b is unreachable in the search radius.
+export function geodesicBetween(surface, a, b, { iterations = 4, tol = 1e-6, R = null, maxR = Infinity } = {}) {
+  const l0 = logMap(surface, a, b, { R, maxR });
+  if (!l0) return null;
+  let dir = l0.dir;
+  let len = l0.distance;
+  let r = trace(surface, a, dir, len);
+  let miss = Infinity;
+  let it = 0;
+  const localR = (surface.maxFaceSize ??= Math.max(...surface.faces.map((f) => f.size))) * 3;
+  for (; it < iterations; it++) {
+    const le = logMap(surface, r.end, b, { R: localR });
+    if (!le) break;
+    miss = le.distance;
+    if (miss < tol) break;
+    const c = apply2(transpose2(r.M), le.vector); // endpoint-frame error -> a's frame
+    const nv = [dir[0] * len + c[0], dir[1] * len + c[1]];
+    len = len2(nv);
+    if (len < EPS) break;
+    dir = [nv[0] / len, nv[1] / len];
+    r = trace(surface, a, dir, len);
+  }
+  return { ...r, miss, iterations: it };
+}
+
 export { perp2 };

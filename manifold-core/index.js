@@ -12,6 +12,7 @@ export {
   develop,
   logMap,
   distance,
+  geodesicBetween,
 } from './src/geodesic.js';
 export {
   vertexAreas,

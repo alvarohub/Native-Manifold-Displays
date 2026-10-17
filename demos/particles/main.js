@@ -17,6 +17,7 @@ import {
   gaussianCurvature,
   meanCurvature,
   VertexField,
+  geodesicBetween,
 } from '../../manifold-core/index.js';
 import { ParticleSystem, pairForce, uniformField } from '../../manifold-physics/index.js';
 
@@ -206,7 +207,13 @@ function buildSurface() {
   geo.computeVertexNormals();
   surfaceMesh = new THREE.Mesh(
     geo,
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide, transparent: true }),
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+      transparent: true,
+    }),
   );
   scene.add(surfaceMesh);
   wireMesh = new THREE.LineSegments(
@@ -382,7 +389,10 @@ const chordLines = new THREE.LineSegments(
   new THREE.LineBasicMaterial({ color: 0xffd27b, transparent: true, opacity: 0.8 }),
 );
 const geoLines = new THREE.LineSegments(
-  new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_LINK_SEGMENTS * 6), 3)),
+  new THREE.BufferGeometry().setAttribute(
+    'position',
+    new THREE.BufferAttribute(new Float32Array(MAX_LINK_SEGMENTS * 6), 3),
+  ),
   new THREE.LineBasicMaterial({ color: 0x7be0ff, transparent: true, opacity: 0.8 }),
 );
 chordLines.frustumCulled = geoLines.frustumCulled = false;
@@ -403,7 +413,9 @@ function neighbourPairs(k, maxDist) {
     const list = cand[p.id].sort((a, b) => a.d - b.d).slice(0, k);
     for (const { q, d, v } of list) {
       const key = p.id < q.id ? `${p.id}:${q.id}` : `${q.id}:${p.id}`;
-      if (!pairs.has(key)) pairs.set(key, { a: p, b: q, d, dir: [v[0] / d, v[1] / d] });
+      const prev = pairs.get(key);
+      // keep one record per pair, oriented from the lower id so the drawn segment never flips
+      if (!prev || (prev.a.id > prev.b.id && p.id < q.id)) pairs.set(key, { a: p, b: q, d, dir: [v[0] / d, v[1] / d] });
     }
   });
   return [...pairs.values()];
@@ -433,9 +445,10 @@ function renderConnections() {
   if (wantGeo) {
     const attr = geoLines.geometry.getAttribute('position');
     let n = 0;
-    for (const { a, d, dir } of pairs) {
-      // the pair vector lives in a's chart frame (disk plane == root chart): trace it as a geodesic
-      const r = surface.trace(a, dir, d);
+    for (const { a, b } of pairs) {
+      // shooting-corrected geodesic that actually ends at b (the disk's single unfolding only gives a guess)
+      const r = geodesicBetween(surface, a, b, { iterations: 3, tol: 1e-5 });
+      if (!r) continue;
       const pl = r.polyline;
       for (let i = 0; i + 1 < pl.length && n + 2 <= attr.count; i++) {
         const p0 = surface.to3D(pl[i]);
@@ -539,7 +552,8 @@ ui.mesh.onchange = buildSurface;
 ui.subdiv.onchange = buildSurface;
 ui.colorBy.onchange = colourSurface;
 ui.wire.onchange = () => (wireMesh.visible = ui.wire.checked);
-for (const el of [ui.surfOpacity, ui.wireOpacity, ui.trailOpacity, ui.linkOpacity]) el.addEventListener('input', applyOpacities);
+for (const el of [ui.surfOpacity, ui.wireOpacity, ui.trailOpacity, ui.linkOpacity])
+  el.addEventListener('input', applyOpacities);
 ui.cones.onchange = () => (coneGroup.visible = ui.cones.checked);
 ui.count.onchange = rebuildParticles;
 ui.speed.onchange = rebuildParticles;
@@ -605,4 +619,5 @@ window.__nmd = {
   },
   THREE,
   scene,
+  geodesicBetween,
 };
