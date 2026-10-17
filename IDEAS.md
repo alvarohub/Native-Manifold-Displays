@@ -64,6 +64,22 @@ seeds (a histogram of basins, cube vs sphere). The 8-corner check in the
 tests is deliberately a _basin_ test (start near the corners), not a global
 claim.
 
+**Why the torus seems never to settle (Alvaro's question, 2026-10-17; not
+investigated, recorded).** Two candidate causes, one physical, one ours.
+(a) The torus has a continuous symmetry (rotation about its axis) and, for
+repulsive packings, a near-flat family of configurations: the whole lattice
+can slide along the tube and around the ring at almost no energy cost
+(Goldstone-like zero modes), so convergence is slow and the "minimum" is a
+valley, not a bowl. (b) Our pair force keeps **one** unfolding per face (the
+geodesic disk's shortest) and a cutoff $R$; on a torus with $R$ larger than
+the tube circumference ($2\pi r$) the force from a neighbour should include
+its images the other way round the tube and the ring — we drop them, so the
+force field is not exactly the gradient of a potential, and a
+non-conservative field can drive perpetual slow circulation. Test later:
+shrink $R$ below $2\pi r$ and see if drift stops; or sum over all unfoldings
+within $R$ (method of images, LIBRARY_PLAN §5.3). Demo-side the connections
+layer makes the sliding visible.
+
 ## 3. Turtle geometry on surfaces (the robot)
 
 Dead reckoning = Abelson–diSessa turtle. A crawling robot with a pen normal to

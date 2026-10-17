@@ -204,8 +204,12 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       NN 1.21 (≈ icosahedral edge 1.26 for r = 1.2), κₙ reads 0.83 ≈ 1/1.2;
       torus red/blue by K sign with 40 particles at 76 fps; cube + 8 + anneal
       lands most particles on corners within 12 s (the rest still
-      descending — the local-minimum story of IDEAS §2, visible). Pending
-      polish for M9: fixed colour ranges, energy plot, basin histogram.
+      descending — the local-minimum story of IDEAS §2, visible). Added same
+      day (d135500): surface / edge opacity sliders, trail visibility,
+      **connections** between particles (k nearest by surface distance:
+      straight 3D chords and/or geodesic segments on the surface — 12
+      repellers on the sphere draw the icosahedron). Pending polish for M9:
+      fixed colour ranges, energy plot, basin histogram.
 - [ ] **M6 — Curves in, imprint modes (M).** `manifold-ink`: polyline input
       (SVG path sampler, opentype.js contours from myBlobChain's
       `extractContours`), turtle imprint, exp-map imprint, Fermi imprint,
