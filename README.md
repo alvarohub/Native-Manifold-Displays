@@ -18,11 +18,18 @@ firmware that _consume_ this library) — lives at
   maps in O(F)), geodesic tracing with cone-point continuation, holonomy,
   geodesic disks / `logMap` / `distance`, curvature estimators, fields.
 - `manifold-physics/` — particles confined to the surface: integrator,
-  geodesic pair forces, springs, projected fields, annealing temperature.
+  geodesic pair forces, springs, projected fields, annealing temperature,
+  neighbour graphs by surface distance.
+- `manifold-ink/` — 2D curves (SVG, fonts) imprinted on the surface: turtle /
+  exponential-map / Fermi / projection modes, the `{anchor, heading, scale}`
+  placement frame, closure gaps, Darboux lift (κ_g, κₙ, τ_g) for robots.
 - `demos/particles/` — **Demo D1**: particles on any mesh (drop an .obj/.stl),
-  forces along the surface, annealing, trails, colour by what each particle
-  reads. Run `python3 -m http.server 8001` from the repo root and open
-  `http://localhost:8001/demos/particles/`.
+  forces along the surface, annealing, trails, connections, colour by what
+  each particle reads.
+- `demos/imprint/` — **Demo D2**: text / SVG drawn on any mesh in the four
+  imprint modes, movable frame, closure gaps, Darboux/OBJ export.
+  Run `python3 -m http.server 8001` from the repo root and open
+  `http://localhost:8001/demos/particles/` or `.../demos/imprint/`.
 - `tests/` — `node tests/run.mjs` (Node selftests + the lab selftest).
 - `firmware-lib/` — the hardware display layer (`cube_display`): virtual
   layered displays, LED/emitter mapping, and cube topology with precomputed

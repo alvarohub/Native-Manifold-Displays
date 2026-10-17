@@ -229,9 +229,20 @@ dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureA
       circle has radius ρ and circumference 2π sin ρ, Fermi parallel at
       height y shrinks by cos y; `translateFrame` round-trips; cylinder lift
       gives κ_g = 0, κₙ = 1/r around, 0 along.
-- [ ] **M7 — Demo D2 (M).** Text field, font picker, mode switch, drag the
-      anchor / rotate / scale on the surface, closure-gap readout, 3D polyline
-      export (JSON/OBJ lines).
+- [x] **M7 — Demo D2 (M).** _First version 2026-10-17_ — `demos/imprint/`
+      (shares `demos/shared/viewer.js` with D1: renderer, surface meshes,
+      pointer rays, segment buffers). Sources: text via opentype.js (4
+      bundled Google fonts by URL, drop a .ttf/.otf), SVG path, circle,
+      Fermi test grid; point density. Imprint: mode (turtle / exp / Fermi /
+      projection / **all four overlaid** in distinct colours), size, heading,
+      arrow nudges = `translateFrame` along geodesics, "slide along
+      baseline" animation, **click the surface** to move the anchor (heading
+      kept as a 3D direction), closure-gap segments in red, frame gizmo
+      traced as geodesics. Export: Darboux JSON (`liftContour`) and OBJ
+      polylines. Verified in-browser: 0 errors; sphere — the four modes agree
+      near the anchor and diverge toward the ends of the word; cube — text
+      folds across the edge with gap 0.0000; 400 points imprint in 3 ms
+      (25 ms for all four modes).
 - [ ] **M8 — Relaxed text (S).** D2 "relax" button: letters become spring
       chains (rest lengths = planar lengths) with soft anchors; uses M4.
 - [ ] **M9 — Publish: project page (M).** GitHub Pages site for the repo:

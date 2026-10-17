@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drawing on a surface — Native Manifold Displays</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0d12;
+        color: #d8dde6;
+        overflow: hidden;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      #app canvas {
+        display: block;
+        touch-action: none;
+      }
+      .panel {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 310px;
+        max-height: calc(100% - 24px);
+        overflow-y: auto;
+        background: rgba(14, 18, 26, 0.88);
+        border: 1px solid #2a3140;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 13px;
+        backdrop-filter: blur(6px);
+      }
+      .panel.collapsed > *:not(.head) {
+        display: none;
+      }
+      .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .head h1 {
+        font-size: 15px;
+        margin: 0 0 6px;
+        font-weight: 600;
+      }
+      .head button {
+        background: none;
+        border: 1px solid #3a4356;
+        color: #aab3c2;
+        border-radius: 6px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 1px solid #2a3140;
+        border-radius: 8px;
+        margin: 10px 0;
+        padding: 8px 10px;
+      }
+      legend {
+        color: #9fb3d9;
+        padding: 0 4px;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 92px 1fr 48px;
+        gap: 8px;
+        align-items: center;
+        margin: 5px 0;
+      }
+      .row label {
+        color: #aab3c2;
+      }
+      .row output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #e6ebf2;
+      }
+      .row select,
+      .row input[type='text'],
+      .row textarea {
+        grid-column: 2 / 4;
+        background: #121722;
+        color: #e6ebf2;
+        border: 1px solid #2a3140;
+        border-radius: 6px;
+        padding: 3px 6px;
+        font: inherit;
+      }
+      .row textarea {
+        min-height: 54px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+      }
+      .row input[type='range'] {
+        width: 100%;
+      }
+      .row.check {
+        grid-template-columns: 1fr auto;
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .buttons button {
+        background: #1a2230;
+        color: #e6ebf2;
+        border: 1px solid #2f3a4e;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      .buttons button.on {
+        background: #2b5fd9;
+        border-color: #4a7df0;
+      }
+      .readout {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11.5px;
+        color: #9fb3d9;
+        white-space: pre-wrap;
+        line-height: 1.45;
+      }
+      .hint {
+        color: #7f8a9c;
+        font-size: 11.5px;
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+      .swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: -1px;
+      }
+      a {
+        color: #8fb4ff;
+      }
+      #drop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        background: rgba(43, 95, 217, 0.25);
+        font-size: 22px;
+        pointer-events: none;
+      }
+      body.dragging #drop {
+        display: grid;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="drop">drop an .obj / .stl (surface) or .ttf / .otf (font)</div>
+    <section id="panel" class="panel">
+      <div class="head">
+        <h1>Drawing on a surface</h1>
+        <button id="collapse" title="collapse panel">–</button>
+      </div>
+
+      <fieldset>
+        <legend>Surface</legend>
+        <div class="row">
+          <label for="mesh">mesh</label
+          ><select id="mesh"></select>
+        </div>
+        <div class="row">
+          <label for="subdiv">detail</label><input id="subdiv" type="range" min="0" max="5" step="1" value="3" /><output
+            id="subdivOut"
+            >3</output
+          >
+        </div>
+        <div class="row">
+          <label for="surfOpacity">opacity</label
+          ><input id="surfOpacity" type="range" min="0" max="1" step="0.01" value="0.9" /><output id="surfOpacityOut"
+            >0.90</output
+          >
+        </div>
+        <div class="row check"><label for="wire">wireframe</label><input id="wire" type="checkbox" /></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Drawing (2D)</legend>
+        <div class="row">
+          <label for="source">source</label
+          ><select id="source">
+            <option value="text" selected>text (font)</option>
+            <option value="svg">SVG path</option>
+            <option value="circle">circle</option>
+            <option value="grid">grid (Fermi test)</option>
+          </select>
+        </div>
+        <div class="row"><label for="text">text</label><input id="text" type="text" value="surface" /></div>
+        <div class="row">
+          <label for="font">font</label
+          ><select id="font">
+            <option value="https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/shrikhand/Shrikhand-Regular.ttf" selected>
+              Shrikhand
+            </option>
+            <option value="https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/pacifico/Pacifico-Regular.ttf">
+              Pacifico
+            </option>
+            <option value="https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/archivoblack/ArchivoBlack-Regular.ttf">
+              Archivo Black
+            </option>
+            <option value="https://cdn.jsdelivr.net/gh/google/fonts@main/apache/chewy/Chewy-Regular.ttf">Chewy</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="svg">path d</label><textarea id="svg">M0 0 L4 0 L4 2 L0 2 Z M1 0.5 Q2 2.5 3 0.5</textarea>
+        </div>
+        <div class="row">
+          <label for="density">points</label
+          ><input id="density" type="range" min="60" max="1200" step="20" value="400" /><output id="densityOut"
+            >400</output
+          >
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Imprint</legend>
+        <div class="row">
+          <label for="mode">mode</label
+          ><select id="mode">
+            <option value="turtle" selected>turtle — dead reckoning (robot)</option>
+            <option value="exp">exponential map (decal)</option>
+            <option value="fermi">Fermi — geodesic graph paper</option>
+            <option value="projection">projection — extrinsic baseline</option>
+            <option value="all">all four, overlaid</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="size">size</label
+          ><input id="size" type="range" min="0.1" max="4" step="0.02" value="1.4" /><output id="sizeOut">1.40</output>
+        </div>
+        <div class="row">
+          <label for="angle">heading</label
+          ><input id="angle" type="range" min="-180" max="180" step="1" value="0" /><output id="angleOut">0°</output>
+        </div>
+        <div class="buttons">
+          <button id="nudgeL">◀</button><button id="nudgeR">▶</button><button id="nudgeU">▲</button
+          ><button id="nudgeD">▼</button>
+          <button id="animate">slide along baseline</button>
+        </div>
+        <div class="row check">
+          <label for="showGap">show closure gaps (turtle)</label><input id="showGap" type="checkbox" checked />
+        </div>
+        <div class="row check">
+          <label for="showFrame">show frame</label><input id="showFrame" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="lineOpacity">line opacity</label
+          ><input id="lineOpacity" type="range" min="0.1" max="1" step="0.01" value="1" /><output id="lineOpacityOut"
+            >1.00</output
+          >
+        </div>
+        <div class="hint">
+          <span class="swatch" style="background: #ffd27b"></span>turtle
+          <span class="swatch" style="background: #7be0ff"></span>exp
+          <span class="swatch" style="background: #9dff7b"></span>Fermi
+          <span class="swatch" style="background: #ff8fd4"></span>projection
+          <span class="swatch" style="background: #ff4d4d"></span>closure gap
+        </div>
+        <div class="hint">
+          <strong>Click the surface</strong> to move the anchor. Arrows slide the anchor along geodesics (the heading is
+          parallel-transported). Drop a .ttf to use your own font.
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Export</legend>
+        <div class="buttons">
+          <button id="exportJson">Darboux JSON</button>
+          <button id="exportObj">OBJ polylines</button>
+        </div>
+        <div class="hint">
+          Per sample: position, surface normal, tangent, κ<sub>g</sub>, κ<sub>n</sub>, τ<sub>g</sub> — what a pen robot
+          or a non-planar printer needs.
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Readout</legend>
+        <div class="readout" id="readout"></div>
+      </fieldset>
+
+      <div class="hint">
+        Part of <a href="https://github.com/alvarohub/Native-Manifold-Displays">Native Manifold Displays</a> — see
+        docs/DRAWING_ON_SURFACES.md for what each mode preserves.
+      </div>
+    </section>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
