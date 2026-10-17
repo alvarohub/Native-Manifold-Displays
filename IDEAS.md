@@ -50,6 +50,20 @@ curvature is.** Varying $N$ reorganises the whole pattern (Thomson-problem
 dynamics Alvaro explored on a sphere years ago; 8 points → cube corners).
 Status: core of demo D1.
 
+**Local minima and annealing (Alvaro, 2026-10-17).** On the cube the
+landscape is rugged: 8 repelling points can get stuck with four on the
+mid-edges of one face and four on the mid-edges of the opposite face — a
+stationary configuration that is _not_ the corner minimum, and not obviously
+worse. So the gradient flow alone will not find the corners from random
+starts: the demo needs **simulated annealing** (a temperature of random kicks
+decaying to zero — `ParticleSystem.temperature`) and should **draw the
+trajectories** as they converge, so the descent into a basin, the hops between
+basins while hot, and the final freeze become visible. Measuring: energy
+$\sum 1/d_{ij}$ along the run; count distinct final configurations over many
+seeds (a histogram of basins, cube vs sphere). The 8-corner check in the
+tests is deliberately a _basin_ test (start near the corners), not a global
+claim.
+
 ## 3. Turtle geometry on surfaces (the robot)
 
 Dead reckoning = Abelson–diSessa turtle. A crawling robot with a pen normal to

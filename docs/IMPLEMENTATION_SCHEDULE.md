@@ -163,7 +163,7 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       `meanCurvature` (Steiner Σℓθ/4A), `faceCurvatureTensors` +
       `curvatureTensor` (Rusinkiewicz least squares, corner-angle averaging in
       vertex frames, principal curvatures/directions), `curvatureAt(point,
-      dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
+    dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
       `src/fields.js`: `VertexField` (barycentric sample, exact per-face
       gradient, umbrella smoothing), `FaceField`, `vertexNeighbours`. Convex
       = positive. Verified (6 tests, 31 total): icosphere K≈1/r², H≈1/r,
@@ -173,11 +173,22 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       differentiated exactly. Convergence table and its reading in
       `DISCRETE_TO_SMOOTH.md` §2 (integrated 2nd order, pointwise 1st,
       tensor ~1% limited by normal estimates).
-- [ ] **M4 — Particles (M).** `manifold-physics`: particle set, integrator,
-      external forces, pair forces through `logMap` with cutoff (bucket
-      particles by face, query the geodesic disk), spring constraints.
-      Selftest: free particle = `trace`; energy drift bounded; 8 repelling
-      particles on a cube settle near the corners (Thomson-on-a-cube, IDEAS).
+- [x] **M4 — Particles (M).** _Done 2026-10-17._ `manifold-physics/src/particles.js`:
+      `ParticleSystem` (chart-state particles, `addRandom` uniform by area,
+      semi-implicit Euler with substeps, drag, `temperature` = random kicks
+      for annealing, speed cap, optional 3D trails, `forEachNeighbour(R)`
+      through geodesic disks with face buckets), forces `pairForce`
+      (inverse-square / inverse / linear, cutoff, softening), `springForce`
+      (via `logMap`, reaction transported into the partner's chart),
+      `uniformField` (3D vector projected per chart), `customForce`. Disk cache
+      now has a stable radius per query and evicts beyond `surface.maxDisks`.
+      Verified (5 tests, 36 total): free particle ≡ `trace`, drag = e^{−ct},
+      two repellers → antipodal on a sphere, spring settles at its surface
+      rest length, gravity slides side-face particles to the bottom of a cube
+      and leaves level faces alone, 12 annealed repellers on a sphere →
+      icosahedral spacing (NN spread < 8%), 8 repellers started near cube
+      corners sit on them to < 0.05 (basin test; global search needs
+      annealing — IDEAS §2).
 - [ ] **M5 — Demo D1 (M).** three.js host: mesh picker + OBJ drop, particle
       count/force sliders, colour-by-reading, trails; share-ready.
 - [ ] **M6 — Curves in, imprint modes (M).** `manifold-ink`: polyline input

@@ -319,6 +319,8 @@ export function develop(surface, faceId, R) {
   let disk = surface._disks.get(key);
   if (!disk) {
     disk = new GeodesicDisk(surface, faceId, R);
+    const cap = surface.maxDisks ?? 2048;
+    if (surface._disks.size >= cap) surface._disks.delete(surface._disks.keys().next().value); // evict oldest
     surface._disks.set(key, disk);
   }
   return disk;

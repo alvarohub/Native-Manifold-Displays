@@ -15,8 +15,14 @@ for (const n of [2, 3, 4, 5]) {
   const K = relErr(gaussianCurvature(s), 1);
   const H = relErr(meanCurvature(s), 1);
   const C = curvatureTensor(s);
-  const k1 = relErr(C.vertex.map((v) => v.k1), 1);
-  const k2 = relErr(C.vertex.map((v) => v.k2), 1);
+  const k1 = relErr(
+    C.vertex.map((v) => v.k1),
+    1,
+  );
+  const k2 = relErr(
+    C.vertex.map((v) => v.k2),
+    1,
+  );
   const dt = performance.now() - t0;
   console.log(
     `  subdiv ${n} (F=${s.faces.length}): K mean ${K.mean.toFixed(2)}% rms ${K.rms.toFixed(2)}% | H mean ${H.mean.toFixed(2)}% rms ${H.rms.toFixed(2)}% | k1 rms ${k1.rms.toFixed(2)}% k2 rms ${k2.rms.toFixed(2)}% | ${dt.toFixed(0)} ms`,
