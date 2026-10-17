@@ -27,12 +27,20 @@ const ui = {
   subdiv: $('subdiv'),
   colorBy: $('colorBy'),
   wire: $('wire'),
+  surfOpacity: $('surfOpacity'),
+  wireOpacity: $('wireOpacity'),
   cones: $('cones'),
   count: $('count'),
   speed: $('speed'),
   readBy: $('readBy'),
   trails: $('trails'),
   trailLen: $('trailLen'),
+  trailOpacity: $('trailOpacity'),
+  linkChords: $('linkChords'),
+  linkGeo: $('linkGeo'),
+  linkK: $('linkK'),
+  linkMax: $('linkMax'),
+  linkOpacity: $('linkOpacity'),
   reseed: $('reseed'),
   run: $('run'),
   stepOnce: $('stepOnce'),
@@ -59,6 +67,12 @@ bindRange(ui.subdiv);
 bindRange(ui.count);
 bindRange(ui.speed, (v) => v.toFixed(2));
 bindRange(ui.trailLen);
+bindRange(ui.trailOpacity, (v) => v.toFixed(2));
+bindRange(ui.surfOpacity, (v) => v.toFixed(2));
+bindRange(ui.wireOpacity, (v) => v.toFixed(2));
+bindRange(ui.linkK);
+bindRange(ui.linkMax, (v) => v.toFixed(2));
+bindRange(ui.linkOpacity, (v) => v.toFixed(2));
 bindRange(ui.repel, (v) => v.toFixed(2));
 bindRange(ui.radius, (v) => v.toFixed(1));
 bindRange(ui.drag, (v) => v.toFixed(2));
@@ -192,20 +206,32 @@ function buildSurface() {
   geo.computeVertexNormals();
   surfaceMesh = new THREE.Mesh(
     geo,
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide, transparent: true }),
   );
   scene.add(surfaceMesh);
   wireMesh = new THREE.LineSegments(
     new THREE.WireframeGeometry(geo),
-    new THREE.LineBasicMaterial({ color: 0x3a4a66, transparent: true, opacity: 0.45 }),
+    new THREE.LineBasicMaterial({ color: 0x6f84aa, transparent: true, opacity: 0.45 }),
   );
   wireMesh.visible = ui.wire.checked;
   scene.add(wireMesh);
+  applyOpacities();
   coneGroup = buildCones();
   coneGroup.visible = ui.cones.checked;
   scene.add(coneGroup);
   colourSurface();
   rebuildParticles();
+}
+
+function applyOpacities() {
+  const so = parseFloat(ui.surfOpacity.value);
+  surfaceMesh.material.opacity = so;
+  surfaceMesh.material.depthWrite = so > 0.6;
+  surfaceMesh.visible = so > 0.005;
+  wireMesh.material.opacity = parseFloat(ui.wireOpacity.value);
+  for (const l of trailLines) l.material.opacity = parseFloat(ui.trailOpacity.value);
+  chordLines.material.opacity = parseFloat(ui.linkOpacity.value);
+  geoLines.material.opacity = parseFloat(ui.linkOpacity.value);
 }
 
 function colourSurface() {
@@ -304,7 +330,7 @@ function rebuildTrails() {
     geo.setDrawRange(0, 0);
     const line = new THREE.Line(
       geo,
-      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: parseFloat(ui.trailOpacity.value) }),
     );
     line.frustumCulled = false;
     scene.add(line);
@@ -348,6 +374,83 @@ function readParticle(p) {
 
 let readLo = 0;
 let readHi = 1;
+
+// ---------------------------------------------------------------- connections (k nearest by surface distance)
+const MAX_LINK_SEGMENTS = 20000;
+const chordLines = new THREE.LineSegments(
+  new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_N * 12 * 6), 3)),
+  new THREE.LineBasicMaterial({ color: 0xffd27b, transparent: true, opacity: 0.8 }),
+);
+const geoLines = new THREE.LineSegments(
+  new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_LINK_SEGMENTS * 6), 3)),
+  new THREE.LineBasicMaterial({ color: 0x7be0ff, transparent: true, opacity: 0.8 }),
+);
+chordLines.frustumCulled = geoLines.frustumCulled = false;
+chordLines.geometry.setDrawRange(0, 0);
+geoLines.geometry.setDrawRange(0, 0);
+scene.add(chordLines, geoLines);
+
+// pairs (i < j) where j is among i's k nearest within maxDist, or vice versa
+function neighbourPairs(k, maxDist) {
+  const ps = sys.particles;
+  const cand = ps.map(() => []);
+  sys.bucketByFace();
+  sys.forEachNeighbour(maxDist, (p, q, v, d) => {
+    cand[p.id].push({ q, d, v });
+  });
+  const pairs = new Map();
+  ps.forEach((p) => {
+    const list = cand[p.id].sort((a, b) => a.d - b.d).slice(0, k);
+    for (const { q, d, v } of list) {
+      const key = p.id < q.id ? `${p.id}:${q.id}` : `${q.id}:${p.id}`;
+      if (!pairs.has(key)) pairs.set(key, { a: p, b: q, d, dir: [v[0] / d, v[1] / d] });
+    }
+  });
+  return [...pairs.values()];
+}
+
+function renderConnections() {
+  const wantChords = ui.linkChords.checked;
+  const wantGeo = ui.linkGeo.checked;
+  chordLines.visible = wantChords;
+  geoLines.visible = wantGeo;
+  if (!wantChords && !wantGeo) return;
+  const pairs = neighbourPairs(parseInt(ui.linkK.value, 10), parseFloat(ui.linkMax.value));
+  const lift = 0.004;
+  if (wantChords) {
+    const attr = chordLines.geometry.getAttribute('position');
+    let n = 0;
+    for (const { a, b } of pairs) {
+      if (n + 2 > attr.count) break;
+      const pa = surface.to3D(a);
+      const pb = surface.to3D(b);
+      attr.setXYZ(n++, pa[0], pa[1], pa[2]);
+      attr.setXYZ(n++, pb[0], pb[1], pb[2]);
+    }
+    attr.needsUpdate = true;
+    chordLines.geometry.setDrawRange(0, n);
+  }
+  if (wantGeo) {
+    const attr = geoLines.geometry.getAttribute('position');
+    let n = 0;
+    for (const { a, d, dir } of pairs) {
+      // the pair vector lives in a's chart frame (disk plane == root chart): trace it as a geodesic
+      const r = surface.trace(a, dir, d);
+      const pl = r.polyline;
+      for (let i = 0; i + 1 < pl.length && n + 2 <= attr.count; i++) {
+        const p0 = surface.to3D(pl[i]);
+        const p1 = surface.to3D(pl[i + 1]);
+        const n0 = surface.normal(pl[i].faceId);
+        const n1 = surface.normal(pl[i + 1].faceId);
+        attr.setXYZ(n++, p0[0] + n0[0] * lift, p0[1] + n0[1] * lift, p0[2] + n0[2] * lift);
+        attr.setXYZ(n++, p1[0] + n1[0] * lift, p1[1] + n1[1] * lift, p1[2] + n1[2] * lift);
+      }
+    }
+    attr.needsUpdate = true;
+    geoLines.geometry.setDrawRange(0, n);
+  }
+}
+
 function renderParticles() {
   const ps = sys.particles;
   const reads = ps.map((p) => (p.read = readParticle(p)));
@@ -405,6 +508,7 @@ function loop(now) {
       if (p.lastEvents) vertexHits += p.lastEvents.filter((e) => e.type === 'vertex').length;
   }
   renderParticles();
+  renderConnections();
   controls.update();
   renderer.render(scene, camera);
   if (frame++ % 10 === 0) updateReadout();
@@ -435,6 +539,7 @@ ui.mesh.onchange = buildSurface;
 ui.subdiv.onchange = buildSurface;
 ui.colorBy.onchange = colourSurface;
 ui.wire.onchange = () => (wireMesh.visible = ui.wire.checked);
+for (const el of [ui.surfOpacity, ui.wireOpacity, ui.trailOpacity, ui.linkOpacity]) el.addEventListener('input', applyOpacities);
 ui.cones.onchange = () => (coneGroup.visible = ui.cones.checked);
 ui.count.onchange = rebuildParticles;
 ui.speed.onchange = rebuildParticles;

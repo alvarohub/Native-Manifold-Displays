@@ -195,7 +195,9 @@
             <option value="field">test field (stripes)</option>
           </select>
         </div>
+        <div class="row"><label for="surfOpacity">surface opacity</label><input id="surfOpacity" type="range" min="0" max="1" step="0.01" value="1" /><output id="surfOpacityOut">1.00</output></div>
         <div class="row check"><label for="wire">wireframe</label><input id="wire" type="checkbox" /></div>
+        <div class="row"><label for="wireOpacity">edge opacity</label><input id="wireOpacity" type="range" min="0" max="1" step="0.01" value="0.45" /><output id="wireOpacityOut">0.45</output></div>
         <div class="row check"><label for="cones">show cone points</label><input id="cones" type="checkbox" /></div>
         <div class="hint">Drop an .obj / .stl anywhere to load your own object.</div>
       </fieldset>
@@ -227,6 +229,7 @@
             >200</output
           >
         </div>
+        <div class="row"><label for="trailOpacity">trail visibility</label><input id="trailOpacity" type="range" min="0" max="1" step="0.01" value="0.85" /><output id="trailOpacityOut">0.85</output></div>
         <div class="buttons">
           <button id="reseed">reseed</button>
           <button id="run" class="on">running</button>
@@ -271,6 +274,16 @@
         <div class="buttons">
           <button id="anneal">anneal (hot → cold)</button>
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Connections between particles</legend>
+        <div class="row check"><label for="linkChords">straight lines in 3D (chords)</label><input id="linkChords" type="checkbox" /></div>
+        <div class="row check"><label for="linkGeo">geodesic segments on the surface</label><input id="linkGeo" type="checkbox" /></div>
+        <div class="row"><label for="linkK">neighbours k</label><input id="linkK" type="range" min="1" max="12" step="1" value="5" /><output id="linkKOut">5</output></div>
+        <div class="row"><label for="linkMax">max distance</label><input id="linkMax" type="range" min="0.1" max="4" step="0.05" value="1.6" /><output id="linkMaxOut">1.60</output></div>
+        <div class="row"><label for="linkOpacity">line opacity</label><input id="linkOpacity" type="range" min="0" max="1" step="0.01" value="0.8" /><output id="linkOpacityOut">0.80</output></div>
+        <div class="hint">Each particle links to its k nearest neighbours by <em>surface</em> distance. With 12 repellers on a sphere and k = 5 the chords draw an icosahedron.</div>
       </fieldset>
 
       <fieldset>
