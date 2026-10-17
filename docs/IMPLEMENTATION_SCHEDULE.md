@@ -157,11 +157,22 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       shortest-among-found approximation around cone points — fine for the
       short-range forces and decals it serves; not a general shortest-path
       solver.
-- [ ] **M3 — Fields and curvature (S/M).** Per-vertex/per-face attributes,
-      barycentric sampling + gradient; dihedral mean curvature; Rusinkiewicz
-      curvature tensor; `curvatureAt(point, dir)`. Selftest: icosphere tensor
-      → $\kappa_n \approx 1/r$ in every direction; cylinder → $0$ along axis,
-      $1/r$ around.
+- [x] **M3 — Fields and curvature (S/M).** _Done 2026-10-17._
+      `src/curvature.js`: `vertexAreas`, `vertexNormals` (angle-weighted),
+      `gaussianCurvature` (deficit/area), `dihedralAngles` (signed),
+      `meanCurvature` (Steiner Σℓθ/4A), `faceCurvatureTensors` +
+      `curvatureTensor` (Rusinkiewicz least squares, corner-angle averaging in
+      vertex frames, principal curvatures/directions), `curvatureAt(point,
+      dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
+      `src/fields.js`: `VertexField` (barycentric sample, exact per-face
+      gradient, umbrella smoothing), `FaceField`, `vertexNeighbours`. Convex
+      = positive. Verified (6 tests, 31 total): icosphere K≈1/r², H≈1/r,
+      κₙ isotropic, τ_g≈0; cylinder K = 0 exactly, κ₁ = 1/r around, κ₂ = 0
+      along the axis, τ_g(45°) = 1/2r; torus K = cos v/(r(R+r cos v)) incl.
+      both equators; plane/cube flat; linear fields sampled and
+      differentiated exactly. Convergence table and its reading in
+      `DISCRETE_TO_SMOOTH.md` §2 (integrated 2nd order, pointwise 1st,
+      tensor ~1% limited by normal estimates).
 - [ ] **M4 — Particles (M).** `manifold-physics`: particle set, integrator,
       external forces, pair forces through `logMap` with cutoff (bucket
       particles by face, query the geodesic disk), spring constraints.
@@ -216,6 +227,9 @@ physics-engine adapter, firmware table generator, C++/oF port.
 ## 5. Working conventions
 
 - Pure core: no DOM, no three.js, no audio in `manifold-*`.
+- Every geometric quantity is either an exact polyhedral object or an
+  estimator of a smooth one, named and documented as such — see
+  `DISCRETE_TO_SMOOTH.md` (standing rule).
 - Every module ships a Node selftest; run `node tests/run.mjs` before any
   commit. Browser verification of demos follows (test-first workflow: Alvaro
   tests by hand before pushes).

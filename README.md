@@ -38,6 +38,11 @@ firmware that _consume_ this library) — lives at
     obstructions, the `{anchor, heading, scale}` frame).
   - `REFERENCES.md` — curated bibliography + software we learned from +
     Alvaro's related projects; the source for the future project page.
+  - `DISCRETE_TO_SMOOTH.md` — the dictionary between polyhedral quantities
+    (deficits, dihedrals, holonomy, unfoldings) and the smooth differential
+    geometry they are exact analogues or estimators of, with convergence
+    classes; the standing rule that no mesh formula lives without its smooth
+    counterpart.
   - `GEODESIC_MOTION.md` — how a head moves on the surface: atlas method,
     transition maps computed from the 3D embedding, the embedding/rendering
     layer.

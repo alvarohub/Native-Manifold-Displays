@@ -330,6 +330,14 @@ geodesic equation (or use constrained dynamics). The atlas method above is for
 quotients — which is where the instrument's musical structure (cell grids,
 edge events, vertex accents) is exact and cheap.
 
+_Addendum (2026-10-17)._ This paragraph is about the integrator, not about
+the geometry: a dense triangle mesh _is_ a smooth surface's approximation and
+the atlas quantities converge to the smooth ones (second order in the mesh
+size for distances on an icosphere). How each polyhedral quantity relates to
+its smooth counterpart — exact analogue vs. estimator, and in which sense it
+converges — is the subject of
+[DISCRETE_TO_SMOOTH.md](DISCRETE_TO_SMOOTH.md).
+
 ---
 
 # Part II — From a 3D mesh to flat charts: the embedding layer
@@ -385,7 +393,7 @@ orthonormal frame glued to the triangle's plane:
 1. **Normal.**
    $$n = \operatorname{norm}\big((b-a)\times(c-a)\big)$$
    If $n$ points toward the mesh centre ($n\cdot C < 0$), swap $b$ and $c$ —
-   this is how the code *repairs* wrong winding instead of trusting the index
+   this is how the code _repairs_ wrong winding instead of trusting the index
    list.
 
 2. **In-plane axes.** Pick the first edge as the local $u$ axis, and get $v$
@@ -407,7 +415,7 @@ $$
 \text{to2D}:\quad x = (P-C)\cdot u, \qquad y = (P-C)\cdot v
 $$
 
-The second line works *because the basis is orthonormal*: projecting onto $u$
+The second line works _because the basis is orthonormal_: projecting onto $u$
 and $v$ is the inverse of the first line. No matrix inversion anywhere — the
 dot product with an orthonormal basis **is** the inverse transform. (For the
 cube, the same formulas appear in `Surface.to3D` / `Surface.to2D`.)
@@ -438,7 +446,7 @@ face = {
 
 ## 12. From head state to pixels: two different paths
 
-The renderer never simulates in 3D — it only *consumes* the 2D state, through
+The renderer never simulates in 3D — it only _consumes_ the 2D state, through
 one of two doors depending on the surface kind.
 
 ### Path A — polyhedra: the frame formula directly
@@ -446,8 +454,7 @@ one of two doors depending on the surface kind.
 For `kind: 'polyhedron'` the embedding function is literally the chart map:
 
 ```js
-embed: (head, surface) =>
-  surface.to3D(surface.faceById(head.faceId), head.x, head.y)
+embed: (head, surface) => surface.to3D(surface.faceById(head.faceId), head.x, head.y);
 ```
 
 Each frame, `sampleAndPlaceHeads` calls it and writes the result into the
@@ -467,7 +474,7 @@ So the chain is:
 The head sphere then rides the polyhedron exactly, including across seams —
 the seam crossing already happened in 2D (Part I); 3D only sees the result.
 `checkCollisions` compares these embedded 3D positions pairwise (two heads
-meeting on an edge have *different* chart states but the *same* 3D point —
+meeting on an edge have _different_ chart states but the _same_ 3D point —
 embedding is the correct place to detect that).
 
 ### Path B — abstract surfaces: `embed` is a parametric display function
@@ -503,10 +510,10 @@ new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, ... }))
 Three things to note:
 
 1. **Non-indexed soup again.** The 3D vertex list (`raw`) used at build time
-   is *not* what goes to the GPU. For rendering, each face re-emits its three
+   is _not_ what goes to the GPU. For rendering, each face re-emits its three
    corners into one flat `position` buffer — 20 triangles × 3 = 60 vertices
    with duplicates. That is deliberate: with `vertexColors` (one colour per
-   face) and flat facets you *want* duplicated vertices, because a shared
+   face) and flat facets you _want_ duplicated vertices, because a shared
    vertex can't carry two different colours/normals. This is the standard
    "flat-shaded low-poly" recipe.
 
@@ -524,11 +531,11 @@ Three things to note:
 
 The correspondence to keep in mind:
 
-| Layer | Data | Produced from |
-|---|---|---|
-| Logic | `face.verts2`, `edges[]` | 3D mesh, once, at build time |
-| Display mesh | `position`/`color` float buffers | `face.verts3` |
-| Head markers | `mesh.position` | `to3D(face, x, y)` each frame |
-| Grid lines | polyline buffers | `embed(x, y)` sampled |
+| Layer        | Data                             | Produced from                 |
+| ------------ | -------------------------------- | ----------------------------- |
+| Logic        | `face.verts2`, `edges[]`         | 3D mesh, once, at build time  |
+| Display mesh | `position`/`color` float buffers | `face.verts3`                 |
+| Head markers | `mesh.position`                  | `to3D(face, x, y)` each frame |
+| Grid lines   | polyline buffers                 | `embed(x, y)` sampled         |
 
-Same surface, four views of it. The head only ever *lives* in the first row.
+Same surface, four views of it. The head only ever _lives_ in the first row.

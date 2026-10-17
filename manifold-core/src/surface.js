@@ -33,6 +33,7 @@ import {
   distance,
   transportAlong,
 } from './geodesic.js';
+import { curvatureAt, normalAt, gaussianCurvatureAt, curvatureTensor } from './curvature.js';
 
 export class Surface {
   constructor({ faces, name = 'surface', vertices = null, mesh = null, ...meta }) {
@@ -239,6 +240,24 @@ export class Surface {
 
   clearDisks() {
     this._disks = new Map();
+  }
+
+  // ------------------------------------------------------------ smooth estimators (see curvature.js)
+
+  curvatureAt(point, dir) {
+    return curvatureAt(this, point, dir);
+  }
+
+  normalAt(point) {
+    return normalAt(this, point);
+  }
+
+  gaussianCurvatureAt(point) {
+    return gaussianCurvatureAt(this, point);
+  }
+
+  curvatureTensor() {
+    return curvatureTensor(this);
   }
 
   // ------------------------------------------------------------ motion
