@@ -41,6 +41,10 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
 - **Sawhney, R., Crane, K.** — _Boundary First Flattening_, ACM TOG 2017.
   Conformal flattening with boundary control (the conformal imprint mode we
   do not implement).
+- **Lévy, Petitjean, Ray, Maillot** — _Least Squares Conformal Maps for
+  Automatic Texture Atlas Generation_, SIGGRAPH 2002. Conformality as a
+  quadratic (spring-like) energy — the "zero-rest-length springs" reading of
+  the angle-preserving mode (IDEAS §4b).
 - **Abelson, H., diSessa, A.** — _Turtle Geometry: The Computer as a Medium
   for Exploring Mathematics_, MIT Press 1980. Turtles on curved surfaces,
   closure defects, total curvature — the turtle imprint mode.
@@ -89,6 +93,12 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
   <https://alvarocassinelli.com/qbots-swarming-nanobots-and-emergent-behaviour-through-a-non-local-scalar-field/>.
   Emergent behaviour through a shared scalar field — kin to particles reading
   a field on the surface.
+- **Serial Paintings / Back and Forth – pneumatic anadrome** (2013–2020, with
+  D. Saakes and C. Sandor; SIGGRAPH Asia 2020 Art Gallery) —
+  <https://alvarocassinelli.com/serial-paintings/>. The canvas as a
+  decrypting/encrypting mechanism: a 1-D bead string becomes an image only
+  through its support (spiral, space-filling fractal). The "image vs reading
+  support" theme behind the imprint modes (IDEAS §4c).
 - **myBlobChain** (2026) — Verlet chains along glyph outlines with a cursor
   "enzyme lens"; the spring-text machinery D2 ports to the surface.
 - **VivaVoce** (2020 → 2026 web) — flocking words; the "emergent vortex"

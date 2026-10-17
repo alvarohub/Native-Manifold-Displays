@@ -110,6 +110,102 @@ seeded by any imprint mode, relaxed with intrinsic forces. Letters find their
 own minimum-stretch shape; with repulsion between letters a word _spreads_ on
 the object. Status: D2 "relax" button (M8).
 
+## 4b. Constraint modes as spring networks — distances, angles, and the reach of the forces (Alvaro, 2026-10-17)
+
+Alvaro's thought: the four imprint modes are each a privileged family of
+curves; the _general_ answer is a relaxation. Preserve-distance = length
+springs; preserve-angle = "torque springs"; and the **reach** of the springs
+(local vs extended) should interpolate between the two regimes. Taking notes
+with one correction and two extensions:
+
+- **Distances = springs with planar rest lengths.** On a developable surface
+  every spring relaxes to zero stress (the drawing is an isometry). Elsewhere
+  the residual stress is forced: it _is_ the curvature made visible, and the
+  per-vertex strain ellipse of the relaxed net is exactly the Tissot
+  indicatrix of IDEAS §5. Long-range springs (between far points of the
+  drawing) ask for a global isometry — impossible for $K \ne 0$ — so they
+  distribute error over the whole drawing; short-range springs only (edges of
+  a fine triangulation of the drawing) give the elastic / as-rigid-as-possible
+  answer where error is pushed into _bending_ between neighbouring cells. The
+  reach knob is real: it is the cutoff of the pair-force graph we already
+  have in `ParticleSystem` (`neighbourGraph(k, R)`), so one slider gives the
+  whole family.
+- **Angles do not need torque springs — they need _zero-rest-length_
+  springs with the right weights (correction).** A spring network whose rest
+  lengths are all zero minimises the Dirichlet energy
+  $\sum_{ij} w_{ij}\,|x_i - x_j|^2$; with cotangent weights on a
+  triangulated drawing that is the discrete harmonic map, and harmonic maps
+  with free (or circle-type) boundaries are the conformal ones (the soap-film
+  picture: the drawing wants to shrink to a point and the boundary stops it,
+  so what survives is the shape of angles, not sizes). This is the
+  variational core of BFF and of least-squares conformal maps (Lévy et al.
+  2002, "LSCM"). So "angle mode" = relax with `rest = 0` and cotan weights
+  while pinning a scale (two points, or the frame); "distance mode" = relax
+  with `rest = planar length`; a blend $\text{rest} = \lambda\,\ell_{\text{planar}}$
+  with $\lambda \in [0,1]$ is a continuous isometric→conformal dial.
+  (Turtle-type **turning** constraints _are_ angle springs between
+  consecutive segments: they preserve geodesic curvature, i.e. the shape of
+  one stroke but not angles between strokes — that is why turtle letters are
+  perfect individually and misaligned collectively.)
+- **Unification with the particle demo.** Springs on surfaces are already
+  `springForce` via `logMap`; the relaxation is D1's machinery applied to a
+  drawing instead of a gas. The same `temperature` anneals a relaxation out
+  of a bad local minimum (foldovers of the drawing are the local minima
+  here).
+
+## 4c. What is the "image" and what is its "reading support"? (Alvaro, 2026-10-17)
+
+Imprinting depends on how we _decode_ the 2D content, not only on the surface:
+
+- A **curve** can be read as positions (points in a plane — the exp/Fermi/
+  projection readings) or as _odometry_ (lengths between consecutive points +
+  steering angles — the turtle reading). Same SVG, different information
+  content, different imprint.
+- A **raster image** read pixel-wise offers distances and angles to all
+  neighbours; decoded through a chart it becomes a texture (exp-map decal,
+  Schmidt 2006); decoded along a scan path it becomes a _serial_ stream.
+- Link to Alvaro's **Serial Paintings / Back and Forth – pneumatic anadrome**
+  (2013–2020, with D. Saakes and C. Sandor; SIGGRAPH Asia 2020 Art Gallery;
+  <https://alvarocassinelli.com/serial-paintings/>): the canvas as a
+  decrypting/encrypting mechanism. The image is a 1-D string of beads; the
+  _support_ (a spiral, a Hilbert/Gosper/Sierpiński space-filling curve)
+  decides which image appears; shifting the string by one bead destroys it,
+  reversing the string reveals the anadrome. In our vocabulary: the support
+  is a map from a 1-D parameter to the 2-D canvas; here the support is a map
+  from the 2-D canvas to the surface (the imprint mode) — the same idea one
+  dimension up. Natural crossover: a **serial display on a surface** — a
+  single geodesic (or a space-filling curve traced by turtle rules) carrying
+  a bead string across a 3D object; the straightest geodesic on a torus or
+  a cube is itself a quasi-space-filling guide (dense irrational windings).
+  Decoding depends on the support; curvature is one more "key".
+
+## 4d. A canvas interface: any 2D drawing library → a region of the surface (Alvaro, 2026-10-17)
+
+Same move as the physics adapter (LIBRARY_PLAN §5: wrap a stock flat engine
+behind develop/seam/force hooks): wrap a stock **2D drawing API** (canvas2D,
+p5, SVG, a plotter driver) behind a `SurfaceCanvas` whose flat coordinates
+_are_ a chosen parameterization $\varphi : U \to S$ of a patch — one of the
+imprint modes, or a relaxed map. Two directions, both already half-built:
+
+- **Vector**: paths drawn in $U$ are imprinted through $\varphi$ (what
+  `manifold-ink` does; the adapter just translates the library's path
+  commands into `contoursFromCommands`).
+- **Raster**: for every surface sample in the patch, pull its planar
+  coordinates through $\varphi^{-1}$ (= the log map / Fermi inverse, both
+  available via the geodesic disk) and sample the image — the discrete
+  exponential-map decal. This is also the Phase-4 **texture bridge**: a
+  `SurfaceCanvas` _is_ a per-patch texture whose UVs are intrinsic.
+
+Why it makes sense (and the honest limit): a chart in the atlas is a flat
+coordinate system over a face; a `SurfaceCanvas` is a flat coordinate system
+over a _region_ — a bigger, curvature-distorted chart chosen for drawing
+convenience. Any 2D tool works inside it unchanged; the distortion is
+confined to the parameterization, exactly like the physics engine never
+knowing it runs on a manifold. The limit is the cut locus / injectivity
+radius: the region must be small enough for $\varphi$ to be one-to-one, or
+multiple overlapping canvases (an atlas of canvases) are needed — which is
+where the display library and the manifold meet.
+
 ## 5. Make the obstructions visible
 
 Small visual instruments for the demos: a Tissot indicatrix (small geodesic
