@@ -3,24 +3,21 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   Surface,
-  cubeMesh,
-  icosphereMesh,
-  torusMesh,
-  cylinderMesh,
-  planeMesh,
-  tetrahedronMesh,
-  parseOBJ,
-  parseSTL,
-  weldVertices,
-  orientTriangles,
   meshStats,
-  normalizeMesh,
   gaussianCurvature,
   meanCurvature,
   VertexField,
   geodesicBetween,
 } from '../../manifold-core/index.js';
 import { ParticleSystem, pairForce, uniformField } from '../../manifold-physics/index.js';
+import {
+  MESHES,
+  fillMeshSelect,
+  importMeshFile,
+  describeImport,
+  wireMeshImport,
+  setCustomOption,
+} from '../shared/meshes.js';
 
 // ---------------------------------------------------------------- DOM
 const $ = (id) => document.getElementById(id);
@@ -56,6 +53,7 @@ const ui = {
   readout: $('readout'),
   panel: $('panel'),
   collapse: $('collapse'),
+  loadMesh: $('loadMesh'),
 };
 const bindRange = (input, fmt = (v) => v) => {
   const out = $(input.id + 'Out');
@@ -86,21 +84,9 @@ ui.collapse.onclick = () => {
 };
 
 // ---------------------------------------------------------------- meshes
-const MESHES = {
-  icosphere: { label: 'Icosphere', build: (d) => icosphereMesh(Math.min(5, d), 1.2) },
-  cube: { label: 'Cube', build: (d) => cubeMesh(2, 1 + d) },
-  torus: { label: 'Torus', build: (d) => torusMesh(1.1, 0.45, 12 * (d + 1), 6 * (d + 1)) },
-  cylinder: { label: 'Open cylinder', build: (d) => cylinderMesh(0.9, 2.2, 8 * (d + 1), 2 * (d + 1)) },
-  plane: { label: 'Flat square', build: (d) => planeMesh(2.4, 2.4, 2 * (d + 1), 2 * (d + 1)) },
-  tetra: { label: 'Tetrahedron', build: () => tetrahedronMesh(1.1) },
-};
 let customMesh = null;
-for (const [k, m] of Object.entries(MESHES)) {
-  const o = document.createElement('option');
-  o.value = k;
-  o.textContent = m.label;
-  ui.mesh.appendChild(o);
-}
+let importNote = '';
+fillMeshSelect(ui.mesh);
 
 // ---------------------------------------------------------------- three.js scene
 const app = $('app');
@@ -510,6 +496,7 @@ function updateReadout() {
     }
   }
   ui.readout.textContent =
+    (ui.mesh.value === 'custom' && importNote ? `${importNote}\n` : '') +
     `${surface.name}: F=${st.F} V=${st.V} χ=${st.euler}${st.closed ? '' : ' (open)'}  Σδ/2π=${(surface.totalDeficit() / (2 * Math.PI)).toFixed(2)}\n` +
     `N=${sys.particles.length}  t=${sys.time.toFixed(1)}s  E_kin=${sys.kineticEnergy().toExponential(2)}\n` +
     `mean NN dist (3D)=${P.length > 1 ? (nnSum / P.length).toFixed(3) : '–'}  cone hits=${vertexHits}\n` +
@@ -547,35 +534,21 @@ ui.anneal.onclick = () => {
   annealing = { start: performance.now(), duration: 8000, T0: Math.max(0.6, parseFloat(ui.temp.value)) };
 };
 
-// drag & drop OBJ / STL
-window.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  document.body.classList.add('dragging');
-});
-window.addEventListener('dragleave', () => document.body.classList.remove('dragging'));
-window.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  document.body.classList.remove('dragging');
-  const file = e.dataTransfer?.files?.[0];
-  if (!file) return;
-  const name = file.name.toLowerCase();
-  let mesh;
-  if (name.endsWith('.obj')) mesh = parseOBJ(await file.text());
-  else if (name.endsWith('.stl')) mesh = parseSTL(await file.arrayBuffer());
-  else return alert('Drop an .obj or .stl file');
-  mesh = weldVertices(mesh, 1e-6);
-  const rep = orientTriangles(mesh);
-  normalizeMesh(mesh, 1.3);
-  customMesh = mesh;
-  let opt = ui.mesh.querySelector('option[value="custom"]');
-  if (!opt) {
-    opt = document.createElement('option');
-    opt.value = 'custom';
-    ui.mesh.appendChild(opt);
-  }
-  opt.textContent = `${file.name} (${mesh.triangles.length} tri${rep.orientable ? '' : ', non-orientable'})`;
-  ui.mesh.value = 'custom';
-  buildSurface();
+// file import (button or drag & drop) through the library's importMesh
+wireMeshImport({
+  button: ui.loadMesh,
+  onFile: async (file) => {
+    try {
+      const imported = await importMeshFile(file, 1.3);
+      customMesh = imported.mesh;
+      importNote = describeImport(imported);
+      setCustomOption(ui.mesh, `${file.name} (${imported.report.triangles} tri)`);
+      buildSurface();
+    } catch (err) {
+      importNote = `import failed: ${err.message}`;
+      ui.readout.textContent = importNote;
+    }
+  },
 });
 
 buildSurface();

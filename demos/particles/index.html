@@ -209,7 +209,11 @@
           >
         </div>
         <div class="row check"><label for="cones">show cone points</label><input id="cones" type="checkbox" /></div>
-        <div class="hint">Drop an .obj / .stl anywhere to load your own object.</div>
+        <div class="buttons"><button id="loadMesh">Load mesh… (.obj / .stl)</button></div>
+        <div class="hint">
+          Your own object: pick a file or drop it on the page. It is welded, cleaned (degenerate/duplicate triangles),
+          oriented and scaled to fit. Non-orientable and open surfaces work; non-manifold edges are left unglued.
+        </div>
       </fieldset>
 
       <fieldset>

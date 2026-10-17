@@ -1,19 +1,5 @@
 // Demo D2 — drawing on a surface. three.js host for manifold-core + manifold-ink.
-import {
-  Surface,
-  cubeMesh,
-  icosphereMesh,
-  torusMesh,
-  cylinderMesh,
-  planeMesh,
-  tetrahedronMesh,
-  parseOBJ,
-  parseSTL,
-  weldVertices,
-  orientTriangles,
-  normalizeMesh,
-  meshStats,
-} from '../../manifold-core/index.js';
+import { Surface, meshStats } from '../../manifold-core/index.js';
 import {
   parseSVGPath,
   contoursFromCommands,
@@ -29,6 +15,14 @@ import {
   liftContour,
 } from '../../manifold-ink/index.js';
 import { createViewer, surfaceMeshes, pointerRay, SegmentBuffer, download } from '../shared/viewer.js';
+import {
+  MESHES,
+  fillMeshSelect,
+  importMeshFile,
+  describeImport,
+  wireMeshImport,
+  setCustomOption,
+} from '../shared/meshes.js';
 
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(
@@ -58,6 +52,8 @@ const ui = Object.fromEntries(
     'readout',
     'panel',
     'collapse',
+    'loadMesh',
+    'loadFont',
   ].map((id) => [id, $(id)]),
 );
 const bindRange = (input, fmt = (v) => v) => {
@@ -79,21 +75,9 @@ ui.collapse.onclick = () => {
 if (window.innerWidth < 900) ui.collapse.click();
 
 // ---------------------------------------------------------------- meshes
-const MESHES = {
-  icosphere: { label: 'Icosphere', build: (d) => icosphereMesh(Math.min(5, d), 1.2) },
-  cube: { label: 'Cube', build: (d) => cubeMesh(2, 1 + d) },
-  torus: { label: 'Torus', build: (d) => torusMesh(1.1, 0.45, 12 * (d + 1), 6 * (d + 1)) },
-  cylinder: { label: 'Open cylinder', build: (d) => cylinderMesh(0.9, 2.2, 8 * (d + 1), 2 * (d + 1)) },
-  plane: { label: 'Flat square', build: (d) => planeMesh(2.4, 2.4, 2 * (d + 1), 2 * (d + 1)) },
-  tetra: { label: 'Tetrahedron', build: () => tetrahedronMesh(1.1) },
-};
 let customMesh = null;
-for (const [k, m] of Object.entries(MESHES)) {
-  const o = document.createElement('option');
-  o.value = k;
-  o.textContent = m.label;
-  ui.mesh.appendChild(o);
-}
+let importNote = '';
+fillMeshSelect(ui.mesh);
 
 // ---------------------------------------------------------------- scene
 const V = createViewer($('app'));
@@ -265,6 +249,7 @@ function redraw() {
   const st = meshStats(surface.mesh);
   const K = surface.gaussianCurvatureAt(frame.anchor);
   ui.readout.textContent =
+    (ui.mesh.value === 'custom' && importNote ? `${importNote}\n` : '') +
     `${surface.name}: F=${st.F} χ=${st.euler}   K at anchor ≈ ${Number.isFinite(K) ? K.toFixed(3) : '–'}\n` +
     `${contours.length} contours, ${contours.reduce((n, c) => n + c.points.length, 0)} points, size ${frame.scale.toFixed(2)}\n` +
     (gapCount ? `turtle closure gap: mean ${(gapSum / gapCount).toFixed(4)} over ${gapCount} closed contours\n` : '') +
@@ -366,46 +351,38 @@ ui.exportObj.onclick = () => {
   download(`imprint-${mode}.obj`, out, 'text/plain');
 };
 
-// drag & drop: mesh or font
-window.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  document.body.classList.add('dragging');
-});
-window.addEventListener('dragleave', () => document.body.classList.remove('dragging'));
-window.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  document.body.classList.remove('dragging');
-  const file = e.dataTransfer?.files?.[0];
-  if (!file) return;
+// file import: mesh (.obj/.stl) or font (.ttf/.otf) via buttons or drag & drop
+async function onFile(file) {
   const name = file.name.toLowerCase();
-  if (name.endsWith('.ttf') || name.endsWith('.otf')) {
-    font = window.opentype.parse(await file.arrayBuffer());
-    const opt = document.createElement('option');
-    opt.value = 'custom';
-    opt.textContent = file.name;
-    ui.font.appendChild(opt);
-    ui.font.value = 'custom';
-    buildContours();
-    return;
+  try {
+    if (name.endsWith('.ttf') || name.endsWith('.otf')) {
+      font = window.opentype.parse(await file.arrayBuffer());
+      const opt = document.createElement('option');
+      opt.value = 'custom';
+      opt.textContent = file.name;
+      ui.font.appendChild(opt);
+      ui.font.value = 'custom';
+      buildContours();
+      return;
+    }
+    const imported = await importMeshFile(file, 1.3);
+    customMesh = imported.mesh;
+    importNote = describeImport(imported);
+    setCustomOption(ui.mesh, `${file.name} (${imported.report.triangles} tri)`);
+    buildSurface();
+  } catch (err) {
+    importNote = `import failed: ${err.message}`;
+    ui.readout.textContent = importNote;
   }
-  let mesh;
-  if (name.endsWith('.obj')) mesh = parseOBJ(await file.text());
-  else if (name.endsWith('.stl')) mesh = parseSTL(await file.arrayBuffer());
-  else return alert('Drop an .obj/.stl surface or a .ttf/.otf font');
-  mesh = weldVertices(mesh, 1e-6);
-  orientTriangles(mesh);
-  normalizeMesh(mesh, 1.3);
-  customMesh = mesh;
-  let opt = ui.mesh.querySelector('option[value="custom"]');
-  if (!opt) {
-    opt = document.createElement('option');
-    opt.value = 'custom';
-    ui.mesh.appendChild(opt);
-  }
-  opt.textContent = `${file.name} (${mesh.triangles.length} tri)`;
-  ui.mesh.value = 'custom';
-  buildSurface();
-});
+}
+wireMeshImport({ button: ui.loadMesh, accept: '.obj,.stl,.ttf,.otf', onFile });
+ui.loadFont.onclick = () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.ttf,.otf';
+  input.onchange = () => input.files?.[0] && onFile(input.files[0]);
+  input.click();
+};
 
 // ---------------------------------------------------------------- loop
 let last = performance.now();

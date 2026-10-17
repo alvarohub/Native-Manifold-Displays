@@ -208,6 +208,11 @@
           >
         </div>
         <div class="row check"><label for="wire">wireframe</label><input id="wire" type="checkbox" /></div>
+        <div class="buttons"><button id="loadMesh">Load mesh… (.obj / .stl)</button></div>
+        <div class="hint">
+          Your own object: pick a file or drop it on the page. It is welded, cleaned (degenerate/duplicate triangles),
+          oriented and scaled to fit. Non-orientable and open surfaces work; non-manifold edges are left unglued.
+        </div>
       </fieldset>
 
       <fieldset>
@@ -240,6 +245,7 @@
         <div class="row">
           <label for="svg">path d</label><textarea id="svg">M0 0 L4 0 L4 2 L0 2 Z M1 0.5 Q2 2.5 3 0.5</textarea>
         </div>
+        <div class="buttons"><button id="loadFont">Load font… (.ttf / .otf)</button></div>
         <div class="row">
           <label for="density">points</label
           ><input id="density" type="range" min="60" max="1200" step="20" value="400" /><output id="densityOut"

@@ -51,7 +51,14 @@ export class Surface {
   // mesh: { positions, triangles }. Winding defines the chart orientation (u, v, n right-handed).
   static fromMesh(mesh, { name = 'mesh', tolerance = 1e-9 } = {}) {
     const { positions, triangles } = mesh;
-    const faces = triangles.map((tri, id) => triangleChart(id, tri, positions));
+    // degenerate triangles have no chart frame: skip them (ids stay = index into `triangles`)
+    const faces = [];
+    let degenerate = 0;
+    triangles.forEach((tri, id) => {
+      const f = triangleChart(id, tri, positions);
+      if (f.area > 0 && Number.isFinite(f.n[0]) && Number.isFinite(f.u[0])) faces.push(f);
+      else degenerate++;
+    });
 
     // O(F) adjacency: undirected edge key -> [{faceId, edge}]
     const edgeMap = new Map();
@@ -108,6 +115,7 @@ export class Surface {
       nonManifoldEdges,
       edgeCount: edgeMap.size,
       orientationConsistent,
+      degenerateFaces: degenerate,
       tolerance,
     });
   }

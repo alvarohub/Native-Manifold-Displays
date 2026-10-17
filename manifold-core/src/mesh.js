@@ -163,6 +163,109 @@ export function orientTriangles(mesh) {
   return { flipped, components, orientable };
 }
 
+// Weld, drop degenerate (zero-area) and duplicate triangles, drop unreferenced vertices. Returns the clean
+// mesh and a report. `tol` is relative to the bounding-box diagonal.
+export function cleanMesh(mesh, { tol = 1e-7 } = {}) {
+  let lo = [Infinity, Infinity, Infinity];
+  let hi = [-Infinity, -Infinity, -Infinity];
+  for (const p of mesh.positions) {
+    for (let k = 0; k < 3; k++) {
+      if (p[k] < lo[k]) lo[k] = p[k];
+      if (p[k] > hi[k]) hi[k] = p[k];
+    }
+  }
+  const diag = len3(sub3(hi, lo)) || 1;
+  const welded = weldVertices(mesh, diag * tol);
+  const seen = new Set();
+  const triangles = [];
+  let degenerate = 0;
+  let duplicates = 0;
+  const areaEps = (diag * tol) ** 2;
+  for (const tri of welded.triangles) {
+    const [a, b, c] = tri.map((i) => welded.positions[i]);
+    if (0.5 * len3(cross3(sub3(b, a), sub3(c, a))) < areaEps) {
+      degenerate++;
+      continue;
+    }
+    const key = [...tri].sort((x, y) => x - y).join(',');
+    if (seen.has(key)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(key);
+    triangles.push(tri);
+  }
+  // compact vertices
+  const used = new Map();
+  const positions = [];
+  const remapped = triangles.map((tri) =>
+    tri.map((i) => {
+      let j = used.get(i);
+      if (j === undefined) {
+        j = positions.length;
+        positions.push(welded.positions[i]);
+        used.set(i, j);
+      }
+      return j;
+    }),
+  );
+  const out = { positions, triangles: remapped };
+  const orient = orientTriangles(out);
+  return {
+    mesh: out,
+    report: {
+      inputVertices: mesh.positions.length,
+      inputTriangles: mesh.triangles.length,
+      vertices: positions.length,
+      triangles: remapped.length,
+      weldedAway: mesh.positions.length - welded.positions.length,
+      degenerate,
+      duplicates,
+      ...orient,
+      ...meshStats(out),
+    },
+  };
+}
+
+// One-stop import for demos and tools: filename decides the parser (OBJ text, STL text/binary);
+// the mesh is cleaned, oriented and normalised to `radius` (0 = keep units).
+export function importMesh(filename, data, { radius = 1.3 } = {}) {
+  const name = filename.toLowerCase();
+  let raw;
+  if (name.endsWith('.obj')) raw = parseOBJ(typeof data === 'string' ? data : new TextDecoder().decode(data));
+  else if (name.endsWith('.stl')) raw = parseSTL(data);
+  else throw new Error(`unsupported mesh format: ${filename} (use .obj or .stl)`);
+  if (!raw.triangles.length) throw new Error(`${filename}: no triangles found`);
+  const { mesh, report } = cleanMesh(raw);
+  if (radius > 0) normalizeMesh(mesh, radius);
+  return { mesh, report };
+}
+
+// Binary STL writer (for tests/tools; normals recomputed from winding).
+export function writeBinarySTL(mesh) {
+  const F = mesh.triangles.length;
+  const buf = new ArrayBuffer(84 + F * 50);
+  const view = new DataView(buf);
+  view.setUint32(80, F, true);
+  let off = 84;
+  for (let f = 0; f < F; f++) {
+    const n = triangleNormal(mesh, f);
+    view.setFloat32(off, n[0], true);
+    view.setFloat32(off + 4, n[1], true);
+    view.setFloat32(off + 8, n[2], true);
+    off += 12;
+    for (const i of mesh.triangles[f]) {
+      const p = mesh.positions[i];
+      view.setFloat32(off, p[0], true);
+      view.setFloat32(off + 4, p[1], true);
+      view.setFloat32(off + 8, p[2], true);
+      off += 12;
+    }
+    off += 2;
+  }
+  return buf;
+}
+
 export function meshStats(mesh) {
   const edges = new Map();
   for (const tri of mesh.triangles) {
@@ -393,5 +496,42 @@ export function tetrahedronMesh(size = 1) {
     [0, 2, 3],
     [1, 3, 2],
   ];
+  return { positions, triangles };
+}
+
+// Figure-8 immersion of the Klein bottle: a closed NON-ORIENTABLE surface (χ = 0, self-intersecting in 3D).
+// Useful as a stress test: gluings must handle orientation-reversing transitions.
+export function kleinBottleMesh(R = 1.0, r = 0.4, nu = 64, nv = 24) {
+  const positions = [];
+  for (let i = 0; i < nu; i++) {
+    const u = (i / nu) * 2 * Math.PI;
+    for (let j = 0; j < nv; j++) {
+      // half-step offset: the figure-8 curve passes through its centre at v = 0 and v = π, which would make two
+      // vertex rings coincide in 3D; sampling between them keeps the self-intersection off the vertices
+      const v = ((j + 0.5) / nv) * 2 * Math.PI;
+      const w = R + r * Math.cos(u / 2) * Math.sin(v) - r * Math.sin(u / 2) * Math.sin(2 * v);
+      positions.push([
+        w * Math.cos(u),
+        w * Math.sin(u),
+        r * Math.sin(u / 2) * Math.sin(v) + r * Math.cos(u / 2) * Math.sin(2 * v),
+      ]);
+    }
+  }
+  // the u-seam glues with v -> -v (the Möbius identification): j -> nv - 1 - j with the half-step grid
+  const id = (i, j) => {
+    let ii = i;
+    let jj = ((j % nv) + nv) % nv;
+    if (ii >= nu) {
+      ii -= nu;
+      jj = nv - 1 - jj;
+    }
+    return ii * nv + jj;
+  };
+  const triangles = [];
+  for (let i = 0; i < nu; i++) {
+    for (let j = 0; j < nv; j++) {
+      triangles.push([id(i, j), id(i + 1, j), id(i + 1, j + 1)], [id(i, j), id(i + 1, j + 1), id(i, j + 1)]);
+    }
+  }
   return { positions, triangles };
 }

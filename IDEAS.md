@@ -181,10 +181,10 @@ Imprinting depends on how we _decode_ the 2D content, not only on the surface:
 
 ## 4d. A canvas interface: any 2D drawing library → a region of the surface (Alvaro, 2026-10-17)
 
-Same move as the physics adapter (LIBRARY_PLAN §5: wrap a stock flat engine
+Same move as the physics adapter (LIBRARY*PLAN §5: wrap a stock flat engine
 behind develop/seam/force hooks): wrap a stock **2D drawing API** (canvas2D,
 p5, SVG, a plotter driver) behind a `SurfaceCanvas` whose flat coordinates
-_are_ a chosen parameterization $\varphi : U \to S$ of a patch — one of the
+\_are* a chosen parameterization $\varphi : U \to S$ of a patch — one of the
 imprint modes, or a relaxed map. Two directions, both already half-built:
 
 - **Vector**: paths drawn in $U$ are imprinted through $\varphi$ (what
