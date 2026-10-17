@@ -319,3 +319,78 @@ export function rectContour(w, h, cx = 0, cy = 0) {
     closed: true,
   };
 }
+
+// ---------------------------------------------------------------- L-systems (turtle programs)
+// Symbols: F, G = step forward drawing; f = step forward without drawing; + / - = turn by ±angle;
+// [ ] = push / pop state (branches become separate contours); | = turn 180°; other letters only rewrite.
+export const LSYSTEMS = {
+  koch: { axiom: 'F', rules: { F: 'F+F-F-F+F' }, angle: 90, iterations: 3 },
+  snowflake: { axiom: 'F--F--F', rules: { F: 'F+F--F+F' }, angle: 60, iterations: 3 },
+  dragon: { axiom: 'F', rules: { F: 'F+G', G: 'F-G' }, angle: 90, iterations: 10 },
+  hilbert: { axiom: 'A', rules: { A: '+BF-AFA-FB+', B: '-AF+BFB+FA-' }, angle: 90, iterations: 4 },
+  gosper: { axiom: 'F', rules: { F: 'F+G++G-F--FF-G+', G: '-F+GG++G+F--F-G' }, angle: 60, iterations: 3 },
+  sierpinski: { axiom: 'F-G-G', rules: { F: 'F-G+F+G-F', G: 'GG' }, angle: 120, iterations: 4 },
+  plant: { axiom: 'X', rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' }, angle: 25, iterations: 4 },
+  bush: { axiom: 'F', rules: { F: 'FF-[-F+F+F]+[+F-F-F]' }, angle: 22.5, iterations: 3 },
+};
+
+export function expandLSystem(axiom, rules, iterations) {
+  let s = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (const ch of s) next += rules[ch] ?? ch;
+    s = next;
+  }
+  return s;
+}
+
+// Interpret an L-system string as a planar turtle program -> contours (open polylines), step = 1.
+export function lsystemContours({ axiom, rules, angle, iterations, step = 1, startAngle = 0 }) {
+  const s = expandLSystem(axiom, rules, iterations);
+  const a = (angle * Math.PI) / 180;
+  const contours = [];
+  const stack = [];
+  let x = 0;
+  let y = 0;
+  let h = (startAngle * Math.PI) / 180;
+  let cur = [[x, y]];
+  const flush = () => {
+    if (cur.length > 1) contours.push({ points: cur, closed: false });
+    cur = [[x, y]];
+  };
+  for (const ch of s) {
+    switch (ch) {
+      case 'F':
+      case 'G':
+        x += step * Math.cos(h);
+        y += step * Math.sin(h);
+        cur.push([x, y]);
+        break;
+      case 'f':
+        x += step * Math.cos(h);
+        y += step * Math.sin(h);
+        flush();
+        break;
+      case '+':
+        h += a;
+        break;
+      case '-':
+        h -= a;
+        break;
+      case '|':
+        h += Math.PI;
+        break;
+      case '[':
+        stack.push([x, y, h]);
+        break;
+      case ']':
+        [x, y, h] = stack.pop() ?? [x, y, h];
+        flush();
+        break;
+      default:
+        break;
+    }
+  }
+  flush();
+  return contours;
+}

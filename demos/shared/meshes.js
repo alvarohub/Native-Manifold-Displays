@@ -8,6 +8,7 @@ import {
   planeMesh,
   tetrahedronMesh,
   kleinBottleMesh,
+  mobiusBandMesh,
   importMesh,
 } from '../../manifold-core/index.js';
 
@@ -15,6 +16,14 @@ export const MESHES = {
   icosphere: { label: 'Icosphere', build: (d) => icosphereMesh(Math.min(5, d), 1.2) },
   cube: { label: 'Cube', build: (d) => cubeMesh(2, 1 + d) },
   torus: { label: 'Torus', build: (d) => torusMesh(1.1, 0.45, 12 * (d + 1), 6 * (d + 1)) },
+  mobius: {
+    label: 'Möbius band (one-sided, flat)',
+    build: (d) => mobiusBandMesh(1.1, 0.6, 24 * (d + 1), 2 * (d + 1), 1),
+  },
+  mobius3: {
+    label: 'Band with 3 half-twists',
+    build: (d) => mobiusBandMesh(1.1, 0.45, 32 * (d + 1), 2 * (d + 1), 3),
+  },
   klein: {
     label: 'Klein bottle (non-orientable)',
     build: (d) => kleinBottleMesh(0.9, 0.35, 16 * (d + 1), 6 * (d + 1)),

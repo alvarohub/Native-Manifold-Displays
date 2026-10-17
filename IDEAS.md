@@ -221,3 +221,19 @@ a vector carried around a vertex returning rotated (holonomy dial).
   (`MANIFOLD_DISPLAY_IDEA.md`, "Massive particles that bend the display").
 - Robot output: export the surface curve with Darboux frames; a pen robot or a
   laser (scoreLight hardware!) draws it on the real object.
+
+## 7. Möbius band presets + L-systems (Oct 2026)
+
+- **Möbius band for music** (Alvaro: "the moebius band could work very well for music") — link to
+  MoebiusHumanEqualizer/moebiusElasticPamelBand_5. A head running along the band returns on the _other side_
+  after one turn and home after two: a natural 2:1 period / mirror-voice structure. `mobiusBandMesh(R, w, nu,
+  nv, halfTwists)` in core; presets "Möbius" and "Möbius (3 half-twists)" in the demos.
+- **Geometry (verified)**: the standard parametrisation is NOT developable — K ≈ −1/(4R²) on the centreline,
+  more negative at the rim. A flat paper band is a different embedding (Sadowsky 1930; Starostin & van der
+  Heijden, Nature Materials 2007) → candidate "paper Möbius" preset.
+- **Handedness fix (found via the band)**: on non-orientable surfaces some chart transitions are reflections
+  (det M = −1), so "turn left" must be multiplied by a running handedness. Frames carry `hand`;
+  turtle/Fermi/projection respect it. Seam-straddling square: gap 0.40 before → 0.0017 after.
+- **L-systems = native turtle programs** (`LSYSTEMS`, `lsystemContours` in manifold-ink): koch, snowflake,
+  dragon, hilbert, gosper, sierpinski, plant, bush. On a curved surface the same program draws a different
+  fractal (holonomy accumulates per turn). Imprint demo source "L-system", vertices kept exact.

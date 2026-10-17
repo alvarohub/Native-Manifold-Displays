@@ -224,7 +224,22 @@
             <option value="svg">SVG path</option>
             <option value="circle">circle</option>
             <option value="grid">grid (Fermi test)</option>
+            <option value="lsystem">L-system fractal (turtle program)</option>
           </select>
+        </div>
+        <div class="row">
+          <label for="lsys">L-system</label
+          ><select id="lsys"></select>
+        </div>
+        <div class="row">
+          <label for="lsysIter">iterations</label
+          ><input id="lsysIter" type="range" min="1" max="12" step="1" value="3" /><output id="lsysIterOut">3</output>
+        </div>
+        <div class="row">
+          <label for="lsysAngle">angle</label
+          ><input id="lsysAngle" type="range" min="5" max="175" step="0.5" value="90" /><output id="lsysAngleOut"
+            >90°</output
+          >
         </div>
         <div class="row"><label for="text">text</label><input id="text" type="text" value="surface" /></div>
         <div class="row">

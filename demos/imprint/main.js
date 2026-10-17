@@ -7,6 +7,8 @@ import {
   transformContours,
   polylineLength,
   circleContour,
+  LSYSTEMS,
+  lsystemContours,
   makeFrame,
   rotateFrame,
   translateFrame,
@@ -54,6 +56,9 @@ const ui = Object.fromEntries(
     'collapse',
     'loadMesh',
     'loadFont',
+    'lsys',
+    'lsysIter',
+    'lsysAngle',
   ].map((id) => [id, $(id)]),
 );
 const bindRange = (input, fmt = (v) => v) => {
@@ -68,6 +73,22 @@ bindRange(ui.density);
 bindRange(ui.size, (v) => v.toFixed(2));
 bindRange(ui.angle, (v) => `${v}°`);
 bindRange(ui.lineOpacity, (v) => v.toFixed(2));
+bindRange(ui.lsysIter);
+bindRange(ui.lsysAngle, (v) => `${v}°`);
+for (const k of Object.keys(LSYSTEMS)) {
+  const o = document.createElement('option');
+  o.value = k;
+  o.textContent = k;
+  ui.lsys.appendChild(o);
+}
+const syncLsysDefaults = () => {
+  const p = LSYSTEMS[ui.lsys.value];
+  ui.lsysIter.value = p.iterations;
+  ui.lsysAngle.value = p.angle;
+  ui.lsysIter.dispatchEvent(new Event('input'));
+  ui.lsysAngle.dispatchEvent(new Event('input'));
+};
+syncLsysDefaults();
 ui.collapse.onclick = () => {
   ui.panel.classList.toggle('collapsed');
   ui.collapse.textContent = ui.panel.classList.contains('collapsed') ? '+' : '–';
@@ -160,6 +181,18 @@ function buildContours() {
     case 'circle':
       raw = [circleContour(0.5, 256)];
       break;
+    case 'lsystem': {
+      const p = LSYSTEMS[ui.lsys.value];
+      const iterations = Math.min(parseInt(ui.lsysIter.value, 10), p.maxIterations ?? 12);
+      raw = lsystemContours({ ...p, iterations, angle: parseFloat(ui.lsysAngle.value) });
+      // guard against exponential blow-up: cap total points
+      const total = raw.reduce((n, c) => n + c.points.length, 0);
+      if (total > 60000) {
+        ui.readout.textContent = `L-system too large (${total} points) — lower the iterations`;
+        return;
+      }
+      break;
+    }
     case 'grid': {
       const n = 6;
       for (let i = 0; i <= n; i++) {
@@ -177,7 +210,8 @@ function buildContours() {
   let norm = transformContours(raw, { dx: -bb.cx, dy: -bb.cy, scale: s });
   const total = norm.reduce((L, c) => L + polylineLength(c.points, c.closed), 0);
   const step = total / Math.max(10, density);
-  norm = norm.map((c) => contoursFromCommands(toCommands(c), { step })[0] ?? c);
+  // L-systems are exact turtle programs: keep their vertices (corners) instead of resampling
+  if (ui.source.value !== 'lsystem') norm = norm.map((c) => contoursFromCommands(toCommands(c), { step })[0] ?? c);
   contours = norm;
   dirty = true;
 }
@@ -307,6 +341,11 @@ ui.surfOpacity.addEventListener('input', applyLook);
 ui.wire.onchange = applyLook;
 ui.mesh.onchange = ui.subdiv.onchange = buildSurface;
 ui.source.onchange = ui.density.onchange = buildContours;
+ui.lsys.onchange = () => {
+  syncLsysDefaults();
+  buildContours();
+};
+ui.lsysIter.onchange = ui.lsysAngle.onchange = buildContours;
 ui.text.addEventListener('input', buildContours);
 ui.svg.addEventListener('input', buildContours);
 ui.font.onchange = async () => {

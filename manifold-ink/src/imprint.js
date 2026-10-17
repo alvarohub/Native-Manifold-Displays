@@ -3,14 +3,19 @@
 //   exp        – exponential map at the anchor: preserve distances/angles from the anchor
 //   fermi      – geodesic graph paper: baseline geodesic + perpendicular geodesics
 //   projection – extrinsic: project the drawing from the anchor's tangent plane along the normal
-// Every mode consumes the same placement frame { anchor, heading, scale } and returns
+// Every mode consumes the same placement frame { anchor, heading, scale, hand } and returns
 // { mode, contours: [{ points: [chart points], closed, planar, gap }] } where gap is the surface distance
 // between the last and first imprinted point of a closed contour (0 when it closes).
+// `hand` (±1) is the handedness of the drawing plane relative to the anchor's chart. Charts of a
+// non-orientable surface (Möbius band, Klein bottle) cannot all agree on "left": some transition maps are
+// reflections (det M = −1). Every geodesic step therefore updates hand *= sign(det M), and every "turn left" /
+// "perpendicular to the left" is multiplied by hand. On orientable surfaces hand stays +1.
 import {
   apply2,
   perp2,
   norm2,
   rot2,
+  det2,
   add3,
   scl3,
   sub3,
@@ -23,21 +28,24 @@ import { turningAngles } from './curves.js';
 
 // ---------------------------------------------------------------- frame
 
-export function makeFrame(anchor, heading = [1, 0], scale = 1) {
-  return { anchor: { faceId: anchor.faceId, x: anchor.x, y: anchor.y }, heading: norm2(heading), scale };
+export function makeFrame(anchor, heading = [1, 0], scale = 1, hand = 1) {
+  return { anchor: { faceId: anchor.faceId, x: anchor.x, y: anchor.y }, heading: norm2(heading), scale, hand };
 }
+
+const handOf = (M) => (det2(M) < 0 ? -1 : 1);
 
 // Planar vector (in drawing units) -> chart direction and surface length at the anchor.
 function frameVector(frame, x, y) {
   const h = frame.heading;
   const p = perp2(h);
-  const v = [x * h[0] + y * p[0], x * h[1] + y * p[1]];
+  const s = frame.hand ?? 1;
+  const v = [x * h[0] + s * y * p[0], x * h[1] + s * y * p[1]];
   const len = Math.hypot(v[0], v[1]) * frame.scale;
   return { dir: len > 0 ? norm2(v) : [h[0], h[1]], len };
 }
 
 export function rotateFrame(frame, angle) {
-  return { ...frame, heading: apply2(rot2(angle), frame.heading) };
+  return { ...frame, heading: apply2(rot2((frame.hand ?? 1) * angle), frame.heading) };
 }
 
 export function scaleFrame(frame, factor) {
@@ -49,7 +57,12 @@ export function translateFrame(surface, frame, dx, dy) {
   const { dir, len } = frameVector(frame, dx, dy);
   if (len === 0) return frame;
   const r = surface.trace(frame.anchor, dir, len);
-  return { anchor: r.end, heading: norm2(apply2(r.M, frame.heading)), scale: frame.scale };
+  return {
+    anchor: r.end,
+    heading: norm2(apply2(r.M, frame.heading)),
+    scale: frame.scale,
+    hand: (frame.hand ?? 1) * handOf(r.M),
+  };
 }
 
 // Frame from a 3D hit point (e.g. a raycast): heading = a 3D direction projected onto the chart.
@@ -86,11 +99,13 @@ export function imprintTurtle(surface, contour, frame) {
   const r0 = surface.trace(frame.anchor, first.dir, first.len);
   const out = [r0.end];
   if (pts.length < 2) return out;
-  // heading frame transported to the first point; initial travel direction = first planar segment
+  // heading frame transported to the first point; initial travel direction = first planar segment.
+  // `hand` tracks the handedness of the current chart relative to the drawing plane.
+  let hand = (frame.hand ?? 1) * handOf(r0.M);
   const h = norm2(apply2(r0.M, frame.heading));
   const seg0 = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]];
   const a0 = Math.atan2(seg0[1], seg0[0]);
-  let dir = apply2(rot2(a0), h);
+  let dir = apply2(rot2(hand * a0), h);
   const closedPts = contour.closed ? [...pts, pts[0]] : pts;
   const turns = turningAngles(pts, contour.closed);
   let cur = r0.end;
@@ -101,9 +116,10 @@ export function imprintTurtle(surface, contour, frame) {
     const r = surface.trace(cur, dir, len);
     cur = r.end;
     dir = r.dir;
+    hand *= handOf(r.M);
     out.push(cur);
     const turn = turns[i - 1];
-    if (turn !== undefined) dir = apply2(rot2(turn), dir);
+    if (turn !== undefined) dir = apply2(rot2(hand * turn), dir);
   }
   return out; // for closed contours the last point is the return attempt (see imprint)
 }
@@ -130,12 +146,12 @@ export function imprintFermi(surface, contour, frame) {
         Math.abs(x) * frame.scale,
       );
       const H = sx > 0 ? r1.dir : [-r1.dir[0], -r1.dir[1]];
-      base = { point: r1.end, heading: H };
+      base = { point: r1.end, heading: H, hand: (frame.hand ?? 1) * handOf(r1.M) };
       cache.set(key, base);
     }
     if (y === 0) return base.point;
     const p = perp2(base.heading);
-    const d = y > 0 ? p : [-p[0], -p[1]];
+    const d = y * base.hand > 0 ? p : [-p[0], -p[1]];
     return surface.trace(base.point, d, Math.abs(y) * frame.scale).end;
   });
 }
@@ -147,7 +163,7 @@ export function imprintProjection(surface, contour, frame, { direction = null, o
   const P0 = surface.to3D(frame.anchor);
   const N = f.n;
   const e1 = norm3(add3(scl3(f.u, frame.heading[0]), scl3(f.v, frame.heading[1])));
-  const e2 = cross3(N, e1);
+  const e2 = scl3(cross3(N, e1), frame.hand ?? 1);
   const dir = direction ? norm3(direction) : scl3(N, -1);
   const back = offset ?? 4 * (surface.boundingRadius ??= boundingRadius(surface));
   return contour.points.map(([x, y]) => {

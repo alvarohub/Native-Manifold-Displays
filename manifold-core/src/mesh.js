@@ -499,6 +499,34 @@ export function tetrahedronMesh(size = 1) {
   return { positions, triangles };
 }
 
+// Möbius band: strip of width w around a circle of radius R with `halfTwists` half-turns (1 = Möbius,
+// non-orientable with one boundary; 0 = cylinder; 2 = orientable twisted annulus). Open surface.
+// Intrinsically it is (almost) flat — the natural home for turtle imprints and for a one-sided score.
+export function mobiusBandMesh(R = 1.0, w = 0.5, nu = 96, nv = 8, halfTwists = 1) {
+  const positions = [];
+  for (let i = 0; i < nu; i++) {
+    const u = (i / nu) * 2 * Math.PI;
+    const t = (halfTwists * u) / 2;
+    for (let j = 0; j <= nv; j++) {
+      const v = -w / 2 + (w * j) / nv;
+      positions.push([(R + v * Math.cos(t)) * Math.cos(u), (R + v * Math.cos(t)) * Math.sin(u), v * Math.sin(t)]);
+    }
+  }
+  const cols = nv + 1;
+  const id = (i, j) => {
+    if (i < nu) return i * cols + j;
+    // seam: after an odd number of half twists the width direction is reversed
+    return halfTwists % 2 === 1 ? nv - j : j;
+  };
+  const triangles = [];
+  for (let i = 0; i < nu; i++) {
+    for (let j = 0; j < nv; j++) {
+      triangles.push([id(i, j), id(i + 1, j), id(i + 1, j + 1)], [id(i, j), id(i + 1, j + 1), id(i, j + 1)]);
+    }
+  }
+  return { positions, triangles };
+}
+
 // Figure-8 immersion of the Klein bottle: a closed NON-ORIENTABLE surface (χ = 0, self-intersecting in 3D).
 // Useful as a stress test: gluings must handle orientation-reversing transitions.
 export function kleinBottleMesh(R = 1.0, r = 0.4, nu = 64, nv = 24) {

@@ -8,6 +8,9 @@ export {
   transformContours,
   circleContour,
   rectContour,
+  LSYSTEMS,
+  expandLSystem,
+  lsystemContours,
 } from './src/curves.js';
 export {
   makeFrame,
