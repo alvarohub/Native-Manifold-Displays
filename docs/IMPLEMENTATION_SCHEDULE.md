@@ -210,12 +210,25 @@ dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureA
       straight 3D chords and/or geodesic segments on the surface — 12
       repellers on the sphere draw the icosahedron). Pending polish for M9:
       fixed colour ranges, energy plot, basin histogram.
-- [ ] **M6 — Curves in, imprint modes (M).** `manifold-ink`: polyline input
-      (SVG path sampler, opentype.js contours from myBlobChain's
-      `extractContours`), turtle imprint, exp-map imprint, Fermi imprint,
-      projection baseline; the placement frame. Selftest: on a plane all modes
-      coincide with the input; on a cube away from corners turtle = exact
-      unfolding; closed-curve closure gap on an icosphere $\approx \iint K\,dA$.
+- [x] **M6 — Curves in, imprint modes (M).** _Done 2026-10-17._
+      `manifold-ink/src/curves.js`: `parseSVGPath` (M/L/H/V/C/S/Q/T/Z,
+      abs/rel; arcs chorded), `contoursFromCommands` (opentype.js-shaped
+      commands → flattened, uniformly resampled contours, `flipY`),
+      `resampleContour`, `turningAngles`, bbox/transform, circle/rect
+      generators. `manifold-ink/src/imprint.js`: frame
+      `{anchor, heading, scale}` with `makeFrame` / `rotateFrame` /
+      `scaleFrame` / `translateFrame` (geodesic slide + transported heading)
+      / `frameFromPoint`; modes `turtle` (dead reckoning; closed contours
+      keep their return point and report `gap`), `exp`, `fermi`,
+      `projection` (new core `raycast`, Möller–Trumbore); `closureGap`;
+      `liftContour` → position, normal, tangent, κ_g (from logMaps), κₙ,
+      τ_g per sample (the robot/printer output). Verified (6 tests, 42
+      total): plane — all modes reproduce the rotated/scaled drawing to 1e-9;
+      cube — turtle strip across two edges closes exactly and matches exp;
+      unit sphere — turtle circle gap ≈ πρ³ (Gauss–Bonnet, within 25%), exp
+      circle has radius ρ and circumference 2π sin ρ, Fermi parallel at
+      height y shrinks by cos y; `translateFrame` round-trips; cylinder lift
+      gives κ_g = 0, κₙ = 1/r around, 0 along.
 - [ ] **M7 — Demo D2 (M).** Text field, font picker, mode switch, drag the
       anchor / rotate / scale on the surface, closure-gap readout, 3D polyline
       export (JSON/OBJ lines).
@@ -257,6 +270,18 @@ physics-engine adapter, firmware table generator, C++/oF port.
 ## 5. Working conventions
 
 - Pure core: no DOM, no three.js, no audio in `manifold-*`.
+- **Layering rule (2026-10-17).** Demos only _call_ the libraries. A demo may
+  own: DOM/UI, three.js scene code, colour maps, audio adapters, and glue.
+  Anything geometric, dynamic or combinatorial (neighbour graphs, mesh
+  normalisation, curve resampling, imprint maths…) lives in a library the
+  moment it is written — as a new method on an existing class, a new function
+  in the right module, or a new class that composes/extends an existing one
+  (`ParticleSystem` has-a `Surface`; `manifold-ink` functions take a
+  `Surface`; a future rigid-body system would be a new class in
+  `manifold-physics`, not a patch on `ParticleSystem`). Dependency direction:
+  `manifold-core` ← `manifold-physics` ← `manifold-ink` ← demos; never
+  sideways from a demo into another demo. Audit at every milestone: anything
+  a second demo would need to copy gets promoted.
 - Every geometric quantity is either an exact polyhedral object or an
   estimator of a smooth one, named and documented as such — see
   `DISCRETE_TO_SMOOTH.md` (standing rule).

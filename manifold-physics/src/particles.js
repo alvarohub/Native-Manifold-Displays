@@ -140,6 +140,31 @@ export class ParticleSystem {
     this.time += h;
   }
 
+  // k-nearest-neighbour graph by SURFACE distance within maxDist. Returns [{ a, b, d, dir }] with one record
+  // per unordered pair, oriented from the lower id (dir = unit vector a->b in a's chart frame).
+  neighbourGraph(k, maxDist) {
+    const ps = this.particles;
+    const cand = new Map(ps.map((p) => [p.id, []]));
+    this.bucketByFace();
+    this.forEachNeighbour(maxDist, (p, q, v, d) => {
+      cand.get(p.id).push({ q, d, v });
+    });
+    const pairs = new Map();
+    for (const p of ps) {
+      const list = cand
+        .get(p.id)
+        .sort((x, y) => x.d - y.d)
+        .slice(0, k);
+      for (const { q, d, v } of list) {
+        const key = p.id < q.id ? `${p.id}:${q.id}` : `${q.id}:${p.id}`;
+        const prev = pairs.get(key);
+        if (!prev || (prev.a.id > prev.b.id && p.id < q.id))
+          pairs.set(key, { a: p, b: q, d, dir: [v[0] / d, v[1] / d] });
+      }
+    }
+    return [...pairs.values()];
+  }
+
   kineticEnergy() {
     let e = 0;
     for (const p of this.particles) e += 0.5 * p.m * (p.vx * p.vx + p.vy * p.vy);

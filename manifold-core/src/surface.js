@@ -34,6 +34,7 @@ import {
   transportAlong,
 } from './geodesic.js';
 import { curvatureAt, normalAt, gaussianCurvatureAt, curvatureTensor } from './curvature.js';
+import { raycast } from './raycast.js';
 
 export class Surface {
   constructor({ faces, name = 'surface', vertices = null, mesh = null, ...meta }) {
@@ -258,6 +259,10 @@ export class Surface {
 
   curvatureTensor() {
     return curvatureTensor(this);
+  }
+
+  raycast(origin, dir, opts) {
+    return raycast(this, origin, dir, opts);
   }
 
   // ------------------------------------------------------------ motion

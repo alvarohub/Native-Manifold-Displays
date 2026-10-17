@@ -14,6 +14,7 @@ import {
   weldVertices,
   orientTriangles,
   meshStats,
+  normalizeMesh,
   gaussianCurvature,
   meanCurvature,
   VertexField,
@@ -99,21 +100,6 @@ for (const [k, m] of Object.entries(MESHES)) {
   o.value = k;
   o.textContent = m.label;
   ui.mesh.appendChild(o);
-}
-
-function normalizeMesh(mesh, radius = 1.3) {
-  const c = [0, 0, 0];
-  for (const p of mesh.positions) {
-    c[0] += p[0];
-    c[1] += p[1];
-    c[2] += p[2];
-  }
-  c.forEach((v, i) => (c[i] = v / mesh.positions.length));
-  let r = 0;
-  for (const p of mesh.positions) r = Math.max(r, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
-  const s = radius / (r || 1);
-  mesh.positions = mesh.positions.map((p) => [(p[0] - c[0]) * s, (p[1] - c[1]) * s, (p[2] - c[2]) * s]);
-  return mesh;
 }
 
 // ---------------------------------------------------------------- three.js scene
@@ -402,23 +388,7 @@ scene.add(chordLines, geoLines);
 
 // pairs (i < j) where j is among i's k nearest within maxDist, or vice versa
 function neighbourPairs(k, maxDist) {
-  const ps = sys.particles;
-  const cand = ps.map(() => []);
-  sys.bucketByFace();
-  sys.forEachNeighbour(maxDist, (p, q, v, d) => {
-    cand[p.id].push({ q, d, v });
-  });
-  const pairs = new Map();
-  ps.forEach((p) => {
-    const list = cand[p.id].sort((a, b) => a.d - b.d).slice(0, k);
-    for (const { q, d, v } of list) {
-      const key = p.id < q.id ? `${p.id}:${q.id}` : `${q.id}:${p.id}`;
-      const prev = pairs.get(key);
-      // keep one record per pair, oriented from the lower id so the drawn segment never flips
-      if (!prev || (prev.a.id > prev.b.id && p.id < q.id)) pairs.set(key, { a: p, b: q, d, dir: [v[0] / d, v[1] / d] });
-    }
-  });
-  return [...pairs.values()];
+  return sys.neighbourGraph(k, maxDist);
 }
 
 function renderConnections() {
@@ -595,7 +565,7 @@ window.addEventListener('drop', async (e) => {
   else return alert('Drop an .obj or .stl file');
   mesh = weldVertices(mesh, 1e-6);
   const rep = orientTriangles(mesh);
-  normalizeMesh(mesh);
+  normalizeMesh(mesh, 1.3);
   customMesh = mesh;
   let opt = ui.mesh.querySelector('option[value="custom"]');
   if (!opt) {

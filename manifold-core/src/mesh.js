@@ -185,6 +185,25 @@ export function meshStats(mesh) {
   return { V, E, F, euler: V - E + F, boundaryEdges, nonManifoldEdges, closed: boundaryEdges === 0 };
 }
 
+// Centre the mesh on its vertex centroid and scale it so the farthest vertex sits at `radius`.
+export function normalizeMesh(mesh, radius = 1) {
+  const c = [0, 0, 0];
+  for (const p of mesh.positions) {
+    c[0] += p[0];
+    c[1] += p[1];
+    c[2] += p[2];
+  }
+  const n = mesh.positions.length || 1;
+  c[0] /= n;
+  c[1] /= n;
+  c[2] /= n;
+  let r = 0;
+  for (const p of mesh.positions) r = Math.max(r, len3(sub3(p, c)));
+  const s = radius / (r || 1);
+  mesh.positions = mesh.positions.map((p) => scl3(sub3(p, c), s));
+  return mesh;
+}
+
 export function triangleNormal(mesh, f) {
   const [a, b, c] = mesh.triangles[f].map((i) => mesh.positions[i]);
   return norm3(cross3(sub3(b, a), sub3(c, a)));

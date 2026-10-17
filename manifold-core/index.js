@@ -28,3 +28,4 @@ export {
   eigen2,
 } from './src/curvature.js';
 export { VertexField, FaceField, vertexNeighbours } from './src/fields.js';
+export { raycast } from './src/raycast.js';
