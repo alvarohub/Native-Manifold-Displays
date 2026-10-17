@@ -8,7 +8,7 @@ geometry.
 
 This repo holds the reusable library and the math lab. The sister project —
 the Cube Carillon topological sequencer (web instrument + physical LED cube
-firmware that *consume* this library) — lives at
+firmware that _consume_ this library) — lives at
 [alvarohub/CubicCarillon_topologicalSequencer](https://github.com/alvarohub/CubicCarillon_topologicalSequencer).
 
 ## Contents
@@ -22,7 +22,22 @@ firmware that *consume* this library) — lives at
   with end twists, Möbius strip, icosahedral sphere). Run from the repo root:
   `python3 -m http.server 8001` then open
   `http://localhost:8001/experiments/geodesic-surfaces/`.
+- `IDEAS.md` — the running ideas notebook (scoreLight lineage, defect
+  lattices, turtle robots, spring text…). Append as ideas appear.
 - `docs/` — theory and design notes:
+  - `IMPLEMENTATION_SCHEDULE.md` — **schedule of record**: demo-first
+    milestones (M0–M9) for the three libraries (`manifold-core`,
+    `manifold-physics`, `manifold-ink`) and the two demos (particles on a
+    surface; text/curves imprinted on a surface).
+  - `LIBRARY_PLAN.md` — the architecture and rationale: language choice (JS
+    core first, C++ port on demand), purity rules, geometry-central-inspired
+    API, and the pluggable-physics strategy.
+  - `DRAWING_ON_SURFACES.md` — what an imprint of a 2D drawing on a curved
+    surface can and cannot preserve (Theorema Egregium, Darboux frame,
+    turtle / exp-map / Fermi / projection / relaxation modes, the four
+    obstructions, the `{anchor, heading, scale}` frame).
+  - `REFERENCES.md` — curated bibliography + software we learned from +
+    Alvaro's related projects; the source for the future project page.
   - `GEODESIC_MOTION.md` — how a head moves on the surface: atlas method,
     transition maps computed from the 3D embedding, the embedding/rendering
     layer.
