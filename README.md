@@ -13,6 +13,17 @@ firmware that _consume_ this library) — lives at
 
 ## Contents
 
+- `manifold-core/` — the geometry library (pure JS ES module, no DOM): mesh
+  loaders (OBJ/STL) and primitives, `Surface.fromMesh` (charts + transition
+  maps in O(F)), geodesic tracing with cone-point continuation, holonomy,
+  geodesic disks / `logMap` / `distance`, curvature estimators, fields.
+- `manifold-physics/` — particles confined to the surface: integrator,
+  geodesic pair forces, springs, projected fields, annealing temperature.
+- `demos/particles/` — **Demo D1**: particles on any mesh (drop an .obj/.stl),
+  forces along the surface, annealing, trails, colour by what each particle
+  reads. Run `python3 -m http.server 8001` from the repo root and open
+  `http://localhost:8001/demos/particles/`.
+- `tests/` — `node tests/run.mjs` (Node selftests + the lab selftest).
 - `firmware-lib/` — the hardware display layer (`cube_display`): virtual
   layered displays, LED/emitter mapping, and cube topology with precomputed
   integer edge gluings. PlatformIO library format, firmware-portable (no heap,

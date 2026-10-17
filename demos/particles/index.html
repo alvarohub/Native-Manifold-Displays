@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Particles on a surface — Native Manifold Displays</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0d12;
+        color: #d8dde6;
+        overflow: hidden;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      #app canvas {
+        display: block;
+        touch-action: none;
+      }
+      .panel {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 300px;
+        max-height: calc(100% - 24px);
+        overflow-y: auto;
+        background: rgba(14, 18, 26, 0.88);
+        border: 1px solid #2a3140;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 13px;
+        backdrop-filter: blur(6px);
+      }
+      .panel.collapsed > *:not(.head) {
+        display: none;
+      }
+      .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .head h1 {
+        font-size: 15px;
+        margin: 0 0 6px;
+        font-weight: 600;
+      }
+      .head button {
+        background: none;
+        border: 1px solid #3a4356;
+        color: #aab3c2;
+        border-radius: 6px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 1px solid #2a3140;
+        border-radius: 8px;
+        margin: 10px 0;
+        padding: 8px 10px;
+      }
+      legend {
+        color: #9fb3d9;
+        padding: 0 4px;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 92px 1fr 48px;
+        gap: 8px;
+        align-items: center;
+        margin: 5px 0;
+      }
+      .row label {
+        color: #aab3c2;
+      }
+      .row output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #e6ebf2;
+      }
+      .row select,
+      .row input[type='text'] {
+        grid-column: 2 / 4;
+        background: #121722;
+        color: #e6ebf2;
+        border: 1px solid #2a3140;
+        border-radius: 6px;
+        padding: 3px 6px;
+      }
+      .row input[type='range'] {
+        width: 100%;
+      }
+      .row.check {
+        grid-template-columns: 1fr auto;
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0;
+      }
+      .buttons button {
+        background: #1a2230;
+        color: #e6ebf2;
+        border: 1px solid #2f3a4e;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      .buttons button.on {
+        background: #2b5fd9;
+        border-color: #4a7df0;
+      }
+      .readout {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11.5px;
+        color: #9fb3d9;
+        white-space: pre-wrap;
+        line-height: 1.45;
+      }
+      .hint {
+        color: #7f8a9c;
+        font-size: 11.5px;
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+      a {
+        color: #8fb4ff;
+      }
+      #drop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        background: rgba(43, 95, 217, 0.25);
+        font-size: 22px;
+        pointer-events: none;
+      }
+      body.dragging #drop {
+        display: grid;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="drop">drop an .obj or .stl file</div>
+    <section id="panel" class="panel">
+      <div class="head">
+        <h1>Particles on a surface</h1>
+        <button id="collapse" title="collapse panel">–</button>
+      </div>
+
+      <fieldset>
+        <legend>Surface</legend>
+        <div class="row">
+          <label for="mesh">mesh</label
+          ><select id="mesh"></select>
+        </div>
+        <div class="row">
+          <label for="subdiv">detail</label><input id="subdiv" type="range" min="0" max="5" step="1" value="3" /><output
+            id="subdivOut"
+            >3</output
+          >
+        </div>
+        <div class="row">
+          <label for="colorBy">colour</label
+          ><select id="colorBy">
+            <option value="none">plain</option>
+            <option value="K" selected>Gaussian curvature K</option>
+            <option value="H">mean curvature H</option>
+            <option value="deficit">angle deficit (exact)</option>
+            <option value="field">test field (stripes)</option>
+          </select>
+        </div>
+        <div class="row check"><label for="wire">wireframe</label><input id="wire" type="checkbox" /></div>
+        <div class="row check"><label for="cones">show cone points</label><input id="cones" type="checkbox" /></div>
+        <div class="hint">Drop an .obj / .stl anywhere to load your own object.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Particles</legend>
+        <div class="row">
+          <label for="count">count N</label
+          ><input id="count" type="range" min="1" max="400" step="1" value="12" /><output id="countOut">12</output>
+        </div>
+        <div class="row">
+          <label for="speed">initial speed</label
+          ><input id="speed" type="range" min="0" max="2" step="0.05" value="0" /><output id="speedOut">0</output>
+        </div>
+        <div class="row">
+          <label for="readBy">particle reads</label
+          ><select id="readBy">
+            <option value="K">Gaussian curvature here</option>
+            <option value="kn" selected>normal curvature along motion κₙ</option>
+            <option value="tau">geodesic torsion τ_g</option>
+            <option value="field">test field</option>
+            <option value="speed">own speed</option>
+          </select>
+        </div>
+        <div class="row check"><label for="trails">trails</label><input id="trails" type="checkbox" checked /></div>
+        <div class="row">
+          <label for="trailLen">trail length</label
+          ><input id="trailLen" type="range" min="10" max="600" step="10" value="200" /><output id="trailLenOut"
+            >200</output
+          >
+        </div>
+        <div class="buttons">
+          <button id="reseed">reseed</button>
+          <button id="run" class="on">running</button>
+          <button id="stepOnce">step</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Forces (along the surface)</legend>
+        <div class="row">
+          <label for="repel">repulsion</label
+          ><input id="repel" type="range" min="0" max="2" step="0.01" value="0.4" /><output id="repelOut">0.40</output>
+        </div>
+        <div class="row">
+          <label for="law">law</label
+          ><select id="law">
+            <option value="inverseSquare" selected>1 / d²</option>
+            <option value="inverse">1 / d</option>
+            <option value="linear">1 − d/R</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="radius">cutoff R</label
+          ><input id="radius" type="range" min="0.2" max="6" step="0.1" value="4" /><output id="radiusOut">4.0</output>
+        </div>
+        <div class="row">
+          <label for="drag">drag</label><input id="drag" type="range" min="0" max="5" step="0.05" value="1.5" /><output
+            id="dragOut"
+            >1.50</output
+          >
+        </div>
+        <div class="row">
+          <label for="gravity">gravity (−z)</label
+          ><input id="gravity" type="range" min="0" max="5" step="0.05" value="0" /><output id="gravityOut"
+            >0.00</output
+          >
+        </div>
+        <div class="row">
+          <label for="temp">temperature</label
+          ><input id="temp" type="range" min="0" max="2" step="0.01" value="0" /><output id="tempOut">0.00</output>
+        </div>
+        <div class="buttons">
+          <button id="anneal">anneal (hot → cold)</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Readout</legend>
+        <div class="readout" id="readout"></div>
+      </fieldset>
+
+      <div class="hint">
+        Drag to orbit, wheel to zoom. Particles move on straightest geodesics; forces are measured along the surface
+        (geodesic disks), not through space. Part of
+        <a href="https://github.com/alvarohub/Native-Manifold-Displays">Native Manifold Displays</a>.
+      </div>
+    </section>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

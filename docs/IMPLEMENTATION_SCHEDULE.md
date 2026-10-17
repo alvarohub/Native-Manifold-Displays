@@ -163,7 +163,7 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       `meanCurvature` (Steiner Σℓθ/4A), `faceCurvatureTensors` +
       `curvatureTensor` (Rusinkiewicz least squares, corner-angle averaging in
       vertex frames, principal curvatures/directions), `curvatureAt(point,
-    dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
+  dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureAt`.
       `src/fields.js`: `VertexField` (barycentric sample, exact per-face
       gradient, umbrella smoothing), `FaceField`, `vertexNeighbours`. Convex
       = positive. Verified (6 tests, 31 total): icosphere K≈1/r², H≈1/r,
@@ -189,8 +189,23 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       icosahedral spacing (NN spread < 8%), 8 repellers started near cube
       corners sit on them to < 0.05 (basin test; global search needs
       annealing — IDEAS §2).
-- [ ] **M5 — Demo D1 (M).** three.js host: mesh picker + OBJ drop, particle
-      count/force sliders, colour-by-reading, trails; share-ready.
+- [x] **M5 — Demo D1 (M).** _First version 2026-10-17_ — `demos/particles/`
+      (three.js + OrbitControls via importmap). Surface: icosphere / cube /
+      torus / open cylinder / plane / tetrahedron with a detail slider, **drop
+      an .obj/.stl** (weld + orient + normalise); colour by smoothed K, H,
+      exact deficit, or a test field; wireframe; cone points as dots sized by
+      deficit. Particles: N (1–400), initial speed, trails with length,
+      reseed / pause / single step; each particle _reads_ K, κₙ along its
+      motion, τ_g, the test field or its speed and is coloured by it.
+      Forces: repulsion (strength, law, cutoff), drag, gravity (−z),
+      temperature, **anneal** button (hot → cold over 8 s). Readout: mesh
+      stats, Σδ/2π, kinetic energy, mean NN distance, cone hits, fps, cached
+      disks. Verified in-browser: 0 errors; 12 repellers on the icosphere →
+      NN 1.21 (≈ icosahedral edge 1.26 for r = 1.2), κₙ reads 0.83 ≈ 1/1.2;
+      torus red/blue by K sign with 40 particles at 76 fps; cube + 8 + anneal
+      lands most particles on corners within 12 s (the rest still
+      descending — the local-minimum story of IDEAS §2, visible). Pending
+      polish for M9: fixed colour ranges, energy plot, basin histogram.
 - [ ] **M6 — Curves in, imprint modes (M).** `manifold-ink`: polyline input
       (SVG path sampler, opentype.js contours from myBlobChain's
       `extractContours`), turtle imprint, exp-map imprint, Fermi imprint,
