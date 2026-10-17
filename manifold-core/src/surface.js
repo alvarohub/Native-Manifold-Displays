@@ -15,13 +15,24 @@ import {
   cross2,
   norm2,
   len2,
-  mat2,
   apply2,
   matMul2,
   transpose2,
   colsToMat2,
   det2,
 } from './vec.js';
+import {
+  trace as traceGeodesic,
+  firstExit,
+  cornerAngle,
+  vertexFan,
+  holonomy,
+  coneContinuation,
+  develop,
+  logMap,
+  distance,
+  transportAlong,
+} from './geodesic.js';
 
 export class Surface {
   constructor({ faces, name = 'surface', vertices = null, mesh = null, ...meta }) {
@@ -192,48 +203,58 @@ export class Surface {
     return V - this.edgeCount + this.faces.length;
   }
 
+  // ------------------------------------------------------------ geodesics (see geodesic.js)
+
+  trace(point, dir, length, opts) {
+    return traceGeodesic(this, point, dir, length, opts);
+  }
+
+  vertexFan(faceId, corner) {
+    return vertexFan(this, faceId, corner);
+  }
+
+  holonomy(faceId, corner) {
+    return holonomy(this, faceId, corner);
+  }
+
+  coneContinuation(faceId, corner, dir) {
+    return coneContinuation(this, faceId, corner, dir);
+  }
+
+  develop(faceId, R) {
+    return develop(this, faceId, R);
+  }
+
+  logMap(a, b, opts) {
+    return logMap(this, a, b, opts);
+  }
+
+  distance(a, b, opts) {
+    return distance(this, a, b, opts);
+  }
+
+  transportAlong(crossings, vec) {
+    return transportAlong(this, crossings, vec);
+  }
+
+  clearDisks() {
+    this._disks = new Map();
+  }
+
   // ------------------------------------------------------------ motion
 
-  // Advance head {faceId, x, y, vx, vy} by dt along its straightest geodesic. Returns crossing events.
-  stepHead(head, dt, maxCrossings = 64) {
-    let remaining = dt;
-    let skipEdge = -1;
-    const events = [];
-    for (let guard = 0; remaining > 0 && guard < maxCrossings; guard++) {
-      const face = this.faceById(head.faceId);
-      const hit = firstExit(face, [head.x, head.y], [head.vx, head.vy], remaining, skipEdge);
-      if (!hit) {
-        head.x += head.vx * remaining;
-        head.y += head.vy * remaining;
-        return events;
-      }
-      head.x += head.vx * hit.t;
-      head.y += head.vy * hit.t;
-      remaining -= hit.t;
-      const gluing = face.edges[hit.edge];
-      if (!gluing) {
-        const a = face.verts2[hit.edge];
-        const b = face.verts2[(hit.edge + 1) % face.verts2.length];
-        const tangent = norm2(sub2(b, a));
-        const along = head.vx * tangent[0] + head.vy * tangent[1];
-        head.vx = 2 * along * tangent[0] - head.vx;
-        head.vy = 2 * along * tangent[1] - head.vy;
-        skipEdge = hit.edge;
-        events.push({ type: 'boundary', faceId: face.id, edge: hit.edge });
-        continue;
-      }
-      const p = apply2(gluing.M, [head.x, head.y]);
-      const v = apply2(gluing.M, [head.vx, head.vy]);
-      head.faceId = gluing.toFaceId;
-      head.x = p[0] + gluing.t[0];
-      head.y = p[1] + gluing.t[1];
-      head.vx = v[0];
-      head.vy = v[1];
-      skipEdge = gluing.toEdge;
-      events.push({ type: 'edge', faceFrom: face.id, edge: hit.edge, toFace: head.faceId, toEdge: gluing.toEdge });
-    }
-    events.push({ type: 'stalled', faceId: head.faceId, remaining });
-    return events;
+  // Advance head {faceId, x, y, vx, vy} by dt along its straightest geodesic (speed preserved).
+  // Returns the trace's events with crossings as { type: 'edge', ... }.
+  stepHead(head, dt, opts) {
+    const speed = Math.hypot(head.vx, head.vy);
+    if (speed < EPS || dt <= 0) return [];
+    const r = traceGeodesic(this, head, [head.vx / speed, head.vy / speed], speed * dt, opts);
+    head.faceId = r.end.faceId;
+    head.x = r.end.x;
+    head.y = r.end.y;
+    head.vx = r.dir[0] * speed;
+    head.vy = r.dir[1] * speed;
+    return [...r.crossings.map((c) => ({ type: 'edge', ...c })), ...r.events];
   }
 }
 
@@ -266,14 +287,6 @@ function chartSize(verts2) {
   let m = 0;
   for (let i = 0; i < verts2.length; i++) m = Math.max(m, len2(sub2(verts2[(i + 1) % verts2.length], verts2[i])));
   return m;
-}
-
-function cornerAngle(verts2, c) {
-  const n = verts2.length;
-  const p = verts2[c];
-  const e1 = sub2(verts2[(c + 1) % n], p);
-  const e2 = sub2(verts2[(c + n - 1) % n], p);
-  return Math.abs(Math.atan2(cross2(e1, e2), e1[0] * e2[0] + e1[1] * e2[1]));
 }
 
 // Rigid map from chart A to chart B across their shared edge (two candidate isometries, interior probe).
@@ -310,24 +323,6 @@ function transition(A, edgeA, B, edgeB, [P0, P1]) {
   const useRev = score(Mrev, tRev) > score(Mpres, tPres);
   const M = useRev ? Mrev : Mpres;
   return { toFaceId: B.id, toEdge: edgeB, M, t: useRev ? tRev : tPres, length: edgeLen, reflects: det2(M) < 0 };
-}
-
-// Earliest exit of ray p + s·v (0 ≤ s ≤ limit) through the CCW polygon's edges, ignoring skipEdge.
-function firstExit(face, p, v, limit, skipEdge = -1) {
-  const verts = face.verts2;
-  const n = verts.length;
-  let best = null;
-  for (let i = 0; i < n; i++) {
-    if (i === skipEdge) continue;
-    const a = verts[i];
-    const edge = sub2(verts[(i + 1) % n], a);
-    const denom = cross2(edge, v);
-    if (denom >= -EPS * face.size) continue; // parallel or moving inward relative to this edge
-    const value = cross2(edge, sub2(p, a));
-    const t = -value / denom;
-    if (t <= limit + EPS && (!best || t < best.t)) best = { t: Math.max(0, t), edge: i };
-  }
-  return best;
 }
 
 export { transition as _transition, firstExit as _firstExit };

@@ -42,7 +42,8 @@ What it must do:
   geodesic radius $R$ into one plane (a _geodesic disk_: BFS over faces with
   per-face `{M, t}` into the disk plane, pruned by distance). From it:
   `logMap(a, b)` (direction + distance from $a$ to $b$ in $a$'s frame) and
-  `distance(a, b)`, exact for $b$ inside the disk. This is the primitive both
+  `distance(a, b)`, exact on developable patches and a good approximation
+  across cone points for $b$ inside the disk. This is the primitive both
   demos need (pair forces, decal placement). Global shortest paths across a
   dense mesh are **out of scope** (geometry-central's job); the cell-graph BFS
   remains the cheap quantized metric for displays.
@@ -135,12 +136,27 @@ selftest; the lab's `atlas-selftest.mjs` must keep passing throughout.
       included), cube corners δ = π/2, icosahedron 12 equal cones, torus mixed
       signs, 2000-step walk on icosphere with no stalls; build is linear:
       82k faces in ~0.5 s, Σδ/4π = 1.000000000.
-- [ ] **M2 — Trace, transport, develop, logMap (M).** Pure `trace()`;
-      size-relative nudges; cone-point hit event; `transport()`;
-      `develop(point, R)`; `logMap`, `distance`. Selftest: on the cube,
-      distances vs. hand-unfolded values; on an icosphere vs. great-circle
-      distance (converges with subdivision); holonomy around a cube vertex
-      $= 90°$.
+- [x] **M2 — Trace, transport, develop, logMap (M).** _Done 2026-10-17._
+      `src/geodesic.js`: pure `trace(point, dir, length)` → {end, dir,
+      composed M, polyline, crossings, events}; `firstExit` reports vertex
+      hits; `vertexFan` / `holonomy` / `coneContinuation` (straightest rule:
+      equal angles left and right of the total cone angle); `transportAlong`;
+      `GeodesicDisk` + `develop(faceId, R)` (face Dijkstra by unfolded polygon
+      distance, cached per face+R); `logMap` / `distance` (grow R until the
+      target is in the disk). `stepHead` is now a wrapper over `trace`.
+      Verified (9 new tests, 25 total): holonomy = deficit on cube (90°),
+      icosahedron (60°), plane (0); closed cube equator with identity
+      transport; cube distances 2 / 4 / unfolded diagonal 1 and exp(log) = id;
+      planar logMap exact; cylinder short-way wrap exact; cone point through a
+      cube corner matches the hand unfolding (θ = 45° − ψ); asymmetric
+      icosahedron vertex splits the cone angle equally. Icosphere distance vs
+      great circle: mean error 0.68% → 0.17% → 0.05% → 0.02% for subdiv
+      2–5 (second order); disk R=0.5 on icosphere(4) ≈ 360 faces in 0.4 ms.
+      Caveat: the disk keeps each face's _first_ unfolding (shortest polygon
+      distance), so `distance` is exact on developable patches and a
+      shortest-among-found approximation around cone points — fine for the
+      short-range forces and decals it serves; not a general shortest-path
+      solver.
 - [ ] **M3 — Fields and curvature (S/M).** Per-vertex/per-face attributes,
       barycentric sampling + gradient; dihedral mean curvature; Rusinkiewicz
       curvature tensor; `curvatureAt(point, dir)`. Selftest: icosphere tensor
