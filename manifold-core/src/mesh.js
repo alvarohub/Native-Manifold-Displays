@@ -528,6 +528,48 @@ export function mobiusBandMesh(R = 1.0, w = 0.5, nu = 96, nv = 8, halfTwists = 1
   return { positions, triangles };
 }
 
+// Paper (developable) Möbius band: a flat L × w strip, one row of nu rectangles folded only along their
+// diagonals (discrete rulings), glued with a half twist. Built by relaxing the standard band until every edge
+// has its planar length, i.e. an isometric embedding of the flat strip (discrete Sadowsky band, Sadowsky 1930;
+// Starostin & van der Heijden 2007). Here lines parallel to the rim ARE geodesics and loop (needs L/w > √3).
+// Intrinsically exact but extrinsically PLEATED: it can only fold along its fixed diagonals, while a smooth paper
+// band needs tilting rulings (see experiments/paper-mobius).
+export function paperMobiusMesh(L = 7, w = 0.6, nu = 64, { tol = 1e-10, maxIterations = 200000 } = {}) {
+  const base = mobiusBandMesh(L / (2 * Math.PI), w, nu, 1, 1);
+  const h = L / nu;
+  const id = (i, j) => (i < nu ? i * 2 + j : 1 - j);
+  const edges = [];
+  for (let i = 0; i < nu; i++) {
+    const A = [i, 0];
+    const B = [i + 1, 0];
+    const C = [i + 1, 1];
+    const D = [i, 1];
+    for (const [p, q] of [[A, B], [B, C], [A, C], ...(i === 0 ? [[D, A]] : []), [C, D]]) {
+      edges.push([id(...p), id(...q), Math.hypot((q[0] - p[0]) * h, (q[1] - p[1]) * w)]);
+    }
+  }
+  const P = base.positions.map((p) => [...p]);
+  let err = Infinity;
+  for (let it = 0; it < maxIterations && err > tol; it++) {
+    err = 0;
+    for (const [a, b, L0] of edges) {
+      const dx = P[b][0] - P[a][0];
+      const dy = P[b][1] - P[a][1];
+      const dz = P[b][2] - P[a][2];
+      const len = Math.hypot(dx, dy, dz);
+      const c = (len - L0) / len / 2;
+      err = Math.max(err, Math.abs(len - L0) / L0);
+      P[a][0] += c * dx;
+      P[a][1] += c * dy;
+      P[a][2] += c * dz;
+      P[b][0] -= c * dx;
+      P[b][1] -= c * dy;
+      P[b][2] -= c * dz;
+    }
+  }
+  return { positions: P, triangles: base.triangles, isometryError: err };
+}
+
 // Figure-8 immersion of the Klein bottle: a closed NON-ORIENTABLE surface (χ = 0, self-intersecting in 3D).
 // Useful as a stress test: gluings must handle orientation-reversing transitions.
 export function kleinBottleMesh(R = 1.0, r = 0.4, nu = 64, nv = 24) {

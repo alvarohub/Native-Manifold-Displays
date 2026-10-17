@@ -1,6 +1,7 @@
 // Demo D1 — particles on a surface. three.js host for manifold-core + manifold-physics.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { BallControls } from '../shared/ballControls.js';
+import { FatSegments } from '../shared/fatLines.js';
 import {
   Surface,
   meshStats,
@@ -21,42 +22,58 @@ import {
 
 // ---------------------------------------------------------------- DOM
 const $ = (id) => document.getElementById(id);
-const ui = {
-  mesh: $('mesh'),
-  subdiv: $('subdiv'),
-  colorBy: $('colorBy'),
-  wire: $('wire'),
-  surfOpacity: $('surfOpacity'),
-  wireOpacity: $('wireOpacity'),
-  cones: $('cones'),
-  count: $('count'),
-  speed: $('speed'),
-  readBy: $('readBy'),
-  trails: $('trails'),
-  trailLen: $('trailLen'),
-  trailOpacity: $('trailOpacity'),
-  linkChords: $('linkChords'),
-  linkGeo: $('linkGeo'),
-  linkK: $('linkK'),
-  linkMax: $('linkMax'),
-  linkOpacity: $('linkOpacity'),
-  reseed: $('reseed'),
-  run: $('run'),
-  stepOnce: $('stepOnce'),
-  repel: $('repel'),
-  law: $('law'),
-  radius: $('radius'),
-  drag: $('drag'),
-  gravity: $('gravity'),
-  temp: $('temp'),
-  anneal: $('anneal'),
-  readout: $('readout'),
-  panel: $('panel'),
-  collapse: $('collapse'),
-  loadMesh: $('loadMesh'),
-  freeMode: $('freeMode'),
-  clearAll: $('clearAll'),
-};
+const ui = Object.fromEntries(
+  [
+    'mesh',
+    'subdiv',
+    'colorBy',
+    'wire',
+    'surfOpacity',
+    'wireOpacity',
+    'cones',
+    'count',
+    'speed',
+    'readBy',
+    'trails',
+    'trailLen',
+    'trailOpacity',
+    'linkChords',
+    'linkGeo',
+    'linkK',
+    'linkMax',
+    'linkOpacity',
+    'reseed',
+    'run',
+    'stepOnce',
+    'repel',
+    'law',
+    'radius',
+    'drag',
+    'gravity',
+    'temp',
+    'anneal',
+    'readout',
+    'panel',
+    'collapse',
+    'loadMesh',
+    'freeMode',
+    'clearAll',
+    'pStyle',
+    'pSize',
+    'pColorMode',
+    'pColor',
+    'surfColor',
+    'wireW',
+    'wireC',
+    'trailW',
+    'trailC',
+    'trailByParticle',
+    'chordW',
+    'chordC',
+    'geoW',
+    'geoC',
+  ].map((id) => [id, $(id)]),
+);
 const bindRange = (input, fmt = (v) => v) => {
   const out = $(input.id + 'Out');
   const sync = () => {
@@ -80,6 +97,7 @@ bindRange(ui.radius, (v) => v.toFixed(1));
 bindRange(ui.drag, (v) => v.toFixed(2));
 bindRange(ui.gravity, (v) => v.toFixed(2));
 bindRange(ui.temp, (v) => v.toFixed(2));
+bindRange(ui.pSize, (v) => `×${v.toFixed(2)}`);
 ui.collapse.onclick = () => {
   ui.panel.classList.toggle('collapsed');
   ui.collapse.textContent = ui.panel.classList.contains('collapsed') ? '+' : '–';
@@ -101,15 +119,16 @@ scene.background = new THREE.Color('#0a0d12');
 const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
 camera.position.set(2.6, -3.6, 2.4);
 camera.up.set(0, 0, 1);
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+camera.lookAt(0, 0, 0);
+const controls = new BallControls(camera, renderer.domElement);
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
 key.position.set(3, -4, 5);
-scene.add(key);
+camera.add(key); // lights ride with the camera: the lit side stays the side you look at while you turn it
 const fill = new THREE.DirectionalLight(0x8fb4ff, 0.5);
 fill.position.set(-4, 3, -2);
-scene.add(fill);
+camera.add(fill);
+scene.add(camera);
 
 function resize() {
   const w = app.clientWidth;
@@ -125,19 +144,71 @@ if (window.innerWidth < 900) ui.collapse.click();
 // ---------------------------------------------------------------- state
 let surface = null;
 let surfaceMesh = null;
-let wireMesh = null;
+let wireLines = null;
 let coneGroup = null;
 let testField = null;
 let sys = null;
 let pair = null;
 let gravityForce = null;
-let particleMesh = null;
-let trailLines = [];
 let running = true;
 let annealing = null;
 const MAX_N = 400;
+const MAX_TRAIL_SEGMENTS = 250000;
+const FREE_TRAIL = 2000;
+const DROPPED = new THREE.Color(0xffd27b);
 const dummy = new THREE.Object3D();
 const tmpColor = new THREE.Color();
+const fixedColor = new THREE.Color();
+
+const trailLines = new FatSegments(scene, renderer, { max: MAX_TRAIL_SEGMENTS, vertexColors: true });
+const chordLines = new FatSegments(scene, renderer, { max: MAX_N * 12 });
+const geoLines = new FatSegments(scene, renderer, { max: 40000 });
+
+// spheres
+const sphereMesh = new THREE.InstancedMesh(
+  new THREE.SphereGeometry(1, 14, 10),
+  new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0x111111 }),
+  MAX_N,
+);
+sphereMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+sphereMesh.count = 0;
+scene.add(sphereMesh);
+
+// geodesic disks: centre + two rings of points reached by tracing geodesics outwards (they bend over edges)
+const DISK_K = 18;
+const DISK_V = 1 + 2 * DISK_K;
+const DISK_T = 3 * DISK_K;
+const diskGeo = new THREE.BufferGeometry();
+diskGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_N * DISK_V * 3), 3));
+diskGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAX_N * DISK_V * 3), 3));
+{
+  const idx = new Uint32Array(MAX_N * DISK_T * 3);
+  let o = 0;
+  for (let i = 0; i < MAX_N; i++) {
+    const c = i * DISK_V;
+    const r1 = (k) => c + 1 + (k % DISK_K);
+    const r2 = (k) => c + 1 + DISK_K + (k % DISK_K);
+    for (let k = 0; k < DISK_K; k++) {
+      idx.set([c, r1(k), r1(k + 1)], o);
+      idx.set([r1(k), r2(k), r2(k + 1)], o + 3);
+      idx.set([r1(k), r2(k + 1), r1(k + 1)], o + 6);
+      o += 9;
+    }
+  }
+  diskGeo.setIndex(new THREE.BufferAttribute(idx, 1));
+}
+const diskMesh = new THREE.Mesh(
+  diskGeo,
+  new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
+  }),
+);
+diskMesh.frustumCulled = false;
+scene.add(diskMesh);
 
 // diverging colormap centred at zero, robustly scaled
 function colormapDiverging(values) {
@@ -169,11 +240,9 @@ function buildSurface() {
   surface.maxDisks = 4096;
   testField = VertexField.from(surface, (p) => Math.sin(4 * p[0]) * Math.cos(3 * p[2]) + 0.5 * Math.sin(5 * p[1]));
 
-  // geometry (flat-shaded look via non-indexed positions is unnecessary: smooth normals read better)
   if (surfaceMesh) {
-    scene.remove(surfaceMesh);
-    scene.remove(wireMesh);
-    scene.remove(coneGroup);
+    scene.remove(surfaceMesh, coneGroup);
+    wireLines.dispose(scene);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(mesh.positions.flat(), 3));
@@ -190,29 +259,49 @@ function buildSurface() {
     }),
   );
   scene.add(surfaceMesh);
-  wireMesh = new THREE.LineSegments(
-    new THREE.WireframeGeometry(geo),
-    new THREE.LineBasicMaterial({ color: 0x6f84aa, transparent: true, opacity: 0.45 }),
-  );
-  wireMesh.visible = ui.wire.checked;
-  scene.add(wireMesh);
-  applyOpacities();
+  // unique mesh edges as wide lines
+  const seen = new Set();
+  const edges = [];
+  for (const t of mesh.triangles)
+    for (let k = 0; k < 3; k++) {
+      const a = t[k];
+      const b = t[(k + 1) % 3];
+      const id = a < b ? `${a},${b}` : `${b},${a}`;
+      if (!seen.has(id)) {
+        seen.add(id);
+        edges.push([a, b]);
+      }
+    }
+  wireLines = new FatSegments(scene, renderer, { max: edges.length });
+  wireLines.begin();
+  for (const [a, b] of edges) wireLines.seg(mesh.positions[a], mesh.positions[b]);
+  wireLines.end();
   coneGroup = buildCones();
   coneGroup.visible = ui.cones.checked;
   scene.add(coneGroup);
+  applyStyles();
   colourSurface();
+  controls.frame(mesh.positions);
   rebuildParticles();
 }
 
-function applyOpacities() {
+function applyStyles() {
   const so = parseFloat(ui.surfOpacity.value);
   surfaceMesh.material.opacity = so;
   surfaceMesh.material.depthWrite = so > 0.6;
   surfaceMesh.visible = so > 0.005;
-  wireMesh.material.opacity = parseFloat(ui.wireOpacity.value);
-  for (const l of trailLines) l.material.opacity = parseFloat(ui.trailOpacity.value);
-  chordLines.material.opacity = parseFloat(ui.linkOpacity.value);
-  geoLines.material.opacity = parseFloat(ui.linkOpacity.value);
+  wireLines.visible = ui.wire.checked;
+  wireLines.opacity = parseFloat(ui.wireOpacity.value);
+  wireLines.width = parseFloat(ui.wireW.value);
+  wireLines.color = ui.wireC.value;
+  trailLines.opacity = parseFloat(ui.trailOpacity.value);
+  trailLines.width = parseFloat(ui.trailW.value);
+  chordLines.opacity = geoLines.opacity = parseFloat(ui.linkOpacity.value);
+  chordLines.width = parseFloat(ui.chordW.value);
+  chordLines.color = ui.chordC.value;
+  geoLines.width = parseFloat(ui.geoW.value);
+  geoLines.color = ui.geoC.value;
+  fixedColor.set(ui.pColor.value);
 }
 
 function colourSurface() {
@@ -234,9 +323,10 @@ function colourSurface() {
     default:
       values = new Array(n).fill(0);
   }
+  const plain = new THREE.Color(ui.surfColor.value);
   const colors =
     ui.colorBy.value === 'none'
-      ? surface.vertices.map(() => new THREE.Color(0x9aa6ba))
+      ? surface.vertices.map(() => plain)
       : colormapDiverging(values.map((v) => (Number.isNaN(v) ? 0 : v)));
   const arr = new Float32Array(n * 3);
   colors.forEach((c, i) => {
@@ -287,22 +377,9 @@ function rebuildParticles() {
     p.vy = v0 * Math.sin(a);
     p.read = 0;
   }
-  if (!particleMesh) {
-    particleMesh = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(1, 14, 10),
-      new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0x111111 }),
-      MAX_N,
-    );
-    particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    scene.add(particleMesh);
-  }
-  particleMesh.count = n;
-  rebuildTrails();
 }
 
 // Drop one particle at a 3D hit, initial velocity = the screen's horizontal projected onto the face.
-const FREE_TRAIL = 2000;
-const DROPPED = new THREE.Color(0xffd27b);
 function dropParticle(hit) {
   if (sys.particles.length >= MAX_N) return;
   const f = surface.faceById(hit.faceId);
@@ -316,29 +393,6 @@ function dropParticle(hit) {
   v = [(v[0] / len) * speed, (v[1] / len) * speed];
   sys.trailLength = Math.max(sys.trailLength, FREE_TRAIL);
   sys.add({ faceId: hit.faceId, x: hit.x, y: hit.y }, v, { read: 0, dropped: true });
-  particleMesh.count = sys.particles.length;
-  addTrailLine(FREE_TRAIL);
-}
-
-function addTrailLine(len) {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(len * 3), 3));
-  geo.setDrawRange(0, 0);
-  const line = new THREE.Line(
-    geo,
-    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: parseFloat(ui.trailOpacity.value) }),
-  );
-  line.frustumCulled = false;
-  scene.add(line);
-  trailLines.push(line);
-}
-
-function rebuildTrails() {
-  for (const l of trailLines) scene.remove(l);
-  trailLines = [];
-  if (!ui.trails.checked) return;
-  const len = parseInt(ui.trailLen.value, 10);
-  for (const p of sys.particles) addTrailLine(len);
 }
 
 function applyForces() {
@@ -385,70 +439,41 @@ function readParticle(p) {
 let readLo = 0;
 let readHi = 1;
 
-// ---------------------------------------------------------------- connections (k nearest by surface distance)
-const MAX_LINK_SEGMENTS = 20000;
-const chordLines = new THREE.LineSegments(
-  new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_N * 12 * 6), 3)),
-  new THREE.LineBasicMaterial({ color: 0xffd27b, transparent: true, opacity: 0.8 }),
-);
-const geoLines = new THREE.LineSegments(
-  new THREE.BufferGeometry().setAttribute(
-    'position',
-    new THREE.BufferAttribute(new Float32Array(MAX_LINK_SEGMENTS * 6), 3),
-  ),
-  new THREE.LineBasicMaterial({ color: 0x7be0ff, transparent: true, opacity: 0.8 }),
-);
-chordLines.frustumCulled = geoLines.frustumCulled = false;
-chordLines.geometry.setDrawRange(0, 0);
-geoLines.geometry.setDrawRange(0, 0);
-scene.add(chordLines, geoLines);
-
-// pairs (i < j) where j is among i's k nearest within maxDist, or vice versa
-function neighbourPairs(k, maxDist) {
-  return sys.neighbourGraph(k, maxDist);
+function lifted(p, d) {
+  const q = surface.to3D(p);
+  const n = surface.normal(p.faceId);
+  return [q[0] + n[0] * d, q[1] + n[1] * d, q[2] + n[2] * d];
 }
 
+// ---------------------------------------------------------------- connections (k nearest by surface distance)
 function renderConnections() {
   const wantChords = ui.linkChords.checked;
   const wantGeo = ui.linkGeo.checked;
   chordLines.visible = wantChords;
   geoLines.visible = wantGeo;
   if (!wantChords && !wantGeo) return;
-  const pairs = neighbourPairs(parseInt(ui.linkK.value, 10), parseFloat(ui.linkMax.value));
-  const lift = 0.004;
+  const pairs = sys.neighbourGraph(parseInt(ui.linkK.value, 10), parseFloat(ui.linkMax.value));
   if (wantChords) {
-    const attr = chordLines.geometry.getAttribute('position');
-    let n = 0;
-    for (const { a, b } of pairs) {
-      if (n + 2 > attr.count) break;
-      const pa = surface.to3D(a);
-      const pb = surface.to3D(b);
-      attr.setXYZ(n++, pa[0], pa[1], pa[2]);
-      attr.setXYZ(n++, pb[0], pb[1], pb[2]);
-    }
-    attr.needsUpdate = true;
-    chordLines.geometry.setDrawRange(0, n);
+    chordLines.begin();
+    for (const { a, b } of pairs) chordLines.seg(surface.to3D(a), surface.to3D(b));
+    chordLines.end();
   }
   if (wantGeo) {
-    const attr = geoLines.geometry.getAttribute('position');
-    let n = 0;
+    geoLines.begin();
     for (const { a, b } of pairs) {
       // shooting-corrected geodesic that actually ends at b (the disk's single unfolding only gives a guess)
       const r = geodesicBetween(surface, a, b, { iterations: 3, tol: 1e-5 });
       if (!r) continue;
       const pl = r.polyline;
-      for (let i = 0; i + 1 < pl.length && n + 2 <= attr.count; i++) {
-        const p0 = surface.to3D(pl[i]);
-        const p1 = surface.to3D(pl[i + 1]);
-        const n0 = surface.normal(pl[i].faceId);
-        const n1 = surface.normal(pl[i + 1].faceId);
-        attr.setXYZ(n++, p0[0] + n0[0] * lift, p0[1] + n0[1] * lift, p0[2] + n0[2] * lift);
-        attr.setXYZ(n++, p1[0] + n1[0] * lift, p1[1] + n1[1] * lift, p1[2] + n1[2] * lift);
-      }
+      for (let i = 0; i + 1 < pl.length; i++) geoLines.seg(lifted(pl[i], 0.004), lifted(pl[i + 1], 0.004));
     }
-    attr.needsUpdate = true;
-    geoLines.geometry.setDrawRange(0, n);
+    geoLines.end();
   }
+}
+
+function particleColor(p, span, out) {
+  if (ui.pColorMode.value === 'fixed') return out.copy(fixedColor);
+  return sequentialColor((p.read - readLo) / span, out);
 }
 
 function renderParticles() {
@@ -462,28 +487,55 @@ function renderParticles() {
     readHi += (hi - readHi) * 0.1;
   }
   const span = Math.max(1e-9, readHi - readLo);
-  const r = 0.02 + 0.03 / Math.sqrt(Math.max(1, ps.length / 12));
+  const style = ui.pStyle.value;
+  const r = (0.02 + 0.03 / Math.sqrt(Math.max(1, ps.length / 12))) * parseFloat(ui.pSize.value);
+  sphereMesh.count = style === 'sphere' ? ps.length : 0;
+  diskMesh.visible = style === 'disk';
+  const dPos = diskGeo.getAttribute('position');
+  const dCol = diskGeo.getAttribute('color');
+  const trailFixed = new THREE.Color(ui.trailC.value);
+  const byParticle = ui.trailByParticle.checked;
+  trailLines.visible = ui.trails.checked;
+  trailLines.begin();
   ps.forEach((p, i) => {
-    const pos = surface.to3D(p);
-    const n = surface.normal(p.faceId);
-    dummy.position.set(pos[0] + n[0] * r * 0.6, pos[1] + n[1] * r * 0.6, pos[2] + n[2] * r * 0.6);
-    dummy.scale.setScalar(r);
-    dummy.updateMatrix();
-    particleMesh.setMatrixAt(i, dummy.matrix);
-    particleMesh.setColorAt(i, sequentialColor((p.read - readLo) / span, tmpColor));
-    const line = trailLines[i];
-    if (line) {
-      const attr = line.geometry.getAttribute('position');
+    particleColor(p, span, tmpColor);
+    if (style === 'sphere') {
+      const pos = lifted(p, r * 0.6);
+      dummy.position.set(pos[0], pos[1], pos[2]);
+      dummy.scale.setScalar(r);
+      dummy.updateMatrix();
+      sphereMesh.setMatrixAt(i, dummy.matrix);
+      sphereMesh.setColorAt(i, tmpColor);
+    } else if (style === 'disk') {
+      const base = i * DISK_V;
+      const lift = 0.002;
+      const c = lifted(p, lift);
+      dPos.setXYZ(base, c[0], c[1], c[2]);
+      for (let k = 0; k < DISK_K; k++) {
+        const a = (2 * Math.PI * k) / DISK_K;
+        const dir = [Math.cos(a), Math.sin(a)];
+        const q1 = lifted(surface.trace(p, dir, r * 0.5).end, lift);
+        const q2 = lifted(surface.trace(p, dir, r).end, lift);
+        dPos.setXYZ(base + 1 + k, q1[0], q1[1], q1[2]);
+        dPos.setXYZ(base + 1 + DISK_K + k, q2[0], q2[1], q2[2]);
+      }
+      for (let v = 0; v < DISK_V; v++) dCol.setXYZ(base + v, tmpColor.r, tmpColor.g, tmpColor.b);
+    }
+    if (ui.trails.checked) {
+      const tc = byParticle ? (p.dropped && ui.pColorMode.value === 'read' ? DROPPED : tmpColor) : trailFixed;
       const t = p.trail;
-      const k0 = Math.max(0, t.length - attr.count);
-      for (let k = k0; k < t.length; k++) attr.setXYZ(k - k0, t[k][0], t[k][1], t[k][2]);
-      attr.needsUpdate = true;
-      line.geometry.setDrawRange(0, t.length - k0);
-      line.material.color.copy(p.dropped ? DROPPED : tmpColor);
+      for (let k = 0; k + 1 < t.length; k++) trailLines.seg(t[k], t[k + 1], tc);
     }
   });
-  particleMesh.instanceMatrix.needsUpdate = true;
-  if (particleMesh.instanceColor) particleMesh.instanceColor.needsUpdate = true;
+  trailLines.end();
+  if (style === 'sphere') {
+    sphereMesh.instanceMatrix.needsUpdate = true;
+    if (sphereMesh.instanceColor) sphereMesh.instanceColor.needsUpdate = true;
+  } else if (style === 'disk') {
+    dPos.needsUpdate = true;
+    dCol.needsUpdate = true;
+    diskGeo.setDrawRange(0, ps.length * DISK_T * 3);
+  }
 }
 
 // ---------------------------------------------------------------- loop
@@ -510,6 +562,7 @@ function loop(now) {
   }
   renderParticles();
   renderConnections();
+  wireLines.fitResolution();
   controls.update();
   renderer.render(scene, camera);
   if (frame++ % 10 === 0) updateReadout();
@@ -540,16 +593,30 @@ function updateReadout() {
 ui.mesh.onchange = buildSurface;
 ui.subdiv.onchange = buildSurface;
 ui.colorBy.onchange = colourSurface;
-ui.wire.onchange = () => (wireMesh.visible = ui.wire.checked);
-for (const el of [ui.surfOpacity, ui.wireOpacity, ui.trailOpacity, ui.linkOpacity])
-  el.addEventListener('input', applyOpacities);
+ui.surfColor.addEventListener('input', colourSurface);
+for (const el of [
+  ui.wire,
+  ui.surfOpacity,
+  ui.wireOpacity,
+  ui.trailOpacity,
+  ui.linkOpacity,
+  ui.wireW,
+  ui.wireC,
+  ui.trailW,
+  ui.chordW,
+  ui.chordC,
+  ui.geoW,
+  ui.geoC,
+  ui.pColor,
+])
+  el.addEventListener('input', applyStyles);
+ui.wire.onchange = applyStyles;
 ui.cones.onchange = () => (coneGroup.visible = ui.cones.checked);
 ui.count.onchange = rebuildParticles;
 ui.speed.onchange = rebuildParticles;
 ui.trails.onchange = () => {
   sys.trailLength = ui.trails.checked ? parseInt(ui.trailLen.value, 10) : 0;
   for (const p of sys.particles) p.trail.length = 0;
-  rebuildTrails();
 };
 ui.trailLen.onchange = ui.trails.onchange;
 ui.reseed.onclick = rebuildParticles;
@@ -566,12 +633,7 @@ ui.anneal.onclick = () => {
   annealing = { start: performance.now(), duration: 8000, T0: Math.max(0.6, parseFloat(ui.temp.value)) };
 };
 ui.freeMode.onchange = applyForces;
-ui.clearAll.onclick = () => {
-  sys.clear();
-  particleMesh.count = 0;
-  for (const l of trailLines) scene.remove(l);
-  trailLines = [];
-};
+ui.clearAll.onclick = () => sys.clear();
 const raycaster = new THREE.Raycaster();
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!e.shiftKey) return;
@@ -613,5 +675,7 @@ window.__nmd = {
   },
   THREE,
   scene,
+  camera,
+  controls,
   geodesicBetween,
 };

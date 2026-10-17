@@ -1,5 +1,12 @@
 import { assert, near } from './assert.mjs';
-import { Surface, mobiusBandMesh, meshStats, gaussianCurvature, orientTriangles } from '../manifold-core/index.js';
+import {
+  Surface,
+  mobiusBandMesh,
+  paperMobiusMesh,
+  meshStats,
+  gaussianCurvature,
+  orientTriangles,
+} from '../manifold-core/index.js';
 import { LSYSTEMS, lsystemContours, expandLSystem, polylineLength, makeFrame, imprint } from '../manifold-ink/index.js';
 import { sub3, len3 } from '../manifold-core/src/vec.js';
 
@@ -54,6 +61,28 @@ export const tests = {
       const q = imprint(s, rect(0.1, 0.1), makeFrame(start, dir, 1), 'turtle');
       assert(q.contours[0].gap < 5e-3, `seam square gap ${q.contours[0].gap} (dir ${dir})`);
     }
+  },
+
+  'paper Möbius: isometric to a flat strip; a line parallel to the rim loops (mirrored after 1 turn, home after 2)'() {
+    const L = 7;
+    const w = 0.6;
+    const nu = 64;
+    const m = paperMobiusMesh(L, w, nu);
+    assert(m.isometryError < 1e-9, `isometry error ${m.isometryError}`);
+    assert(meshStats(m).euler === 0 && !orientTriangles(structuredClone(m)).orientable, 'Möbius topology');
+    const s = Surface.fromMesh(m);
+    // quarter of the way across rectangle 0, heading along the rim edge A→B
+    const start = s.fromBarycentric(0, [0.5, 0.25, 0.25]);
+    const [A, B] = s.faceById(0).verts2;
+    const n = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    const P0 = s.to3D(start);
+    const r1 = s.trace(start, [(B[0] - A[0]) / n, (B[1] - A[1]) / n], L);
+    assert(!r1.events.some((e) => e.type === 'boundary'), 'never touches the rim');
+    // mirrored point (0.5h, 0.75w) lies in triangle [A, C, D] of the same (folded) rectangle
+    const mirror = s.to3D(s.fromBarycentric(1, [0.25, 0.5, 0.25]));
+    near(len3(sub3(s.to3D(r1.end), mirror)), 0, 1e-6, 'one turn: mirrored to 3/4 width');
+    const r2 = s.trace(r1.end, r1.dir, L);
+    near(len3(sub3(s.to3D(r2.end), P0)), 0, 1e-6, 'two turns: back home');
   },
 
   'L-systems: expansion lengths and turtle geometry of the presets'() {

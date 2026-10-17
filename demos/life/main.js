@@ -127,6 +127,7 @@ function build() {
   );
   borders.visible = ui.grid.checked;
   scene.add(cellMesh, borders);
+  controls.frame(mesh.positions);
   seed();
 }
 

@@ -1,7 +1,7 @@
 // Shared three.js scaffolding for the demos (renderer, camera, lights, orbit controls, surface mesh).
 // Demo-side code: knows about three.js, never about the libraries' internals beyond their public API.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { BallControls } from './ballControls.js';
 
 export function createViewer(container, { background = '#0a0d12', cameraPos = [2.6, -3.6, 2.4] } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -13,15 +13,16 @@ export function createViewer(container, { background = '#0a0d12', cameraPos = [2
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
   camera.position.set(...cameraPos);
   camera.up.set(0, 0, 1);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+  camera.lookAt(0, 0, 0);
+  const controls = new BallControls(camera, renderer.domElement);
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
   const key = new THREE.DirectionalLight(0xffffff, 1.1);
   key.position.set(3, -4, 5);
-  scene.add(key);
+  camera.add(key); // lights ride with the camera so the side you turn towards stays lit
   const fill = new THREE.DirectionalLight(0x8fb4ff, 0.5);
   fill.position.set(-4, 3, -2);
-  scene.add(fill);
+  camera.add(fill);
+  scene.add(camera);
   const resize = () => {
     const w = container.clientWidth;
     const h = container.clientHeight;

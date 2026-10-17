@@ -135,6 +135,7 @@ function buildSurface() {
   }
   ({ solid, wire } = surfaceMeshes(surface));
   scene.add(solid, wire);
+  controls.frame(surface.mesh.positions);
   applyLook();
   // default anchor: the point facing the camera, heading = screen-right so text reads left to right
   const c = camera.position;

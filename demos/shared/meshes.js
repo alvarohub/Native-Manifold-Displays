@@ -9,6 +9,7 @@ import {
   tetrahedronMesh,
   kleinBottleMesh,
   mobiusBandMesh,
+  paperMobiusMesh,
   importMesh,
 } from '../../manifold-core/index.js';
 
@@ -17,8 +18,12 @@ export const MESHES = {
   cube: { label: 'Cube', build: (d) => cubeMesh(2, 1 + d) },
   torus: { label: 'Torus', build: (d) => torusMesh(1.1, 0.45, 12 * (d + 1), 6 * (d + 1)) },
   mobius: {
-    label: 'Möbius band (one-sided, flat)',
+    label: 'Möbius band (smooth formula, K < 0)',
     build: (d) => mobiusBandMesh(1.1, 0.6, 24 * (d + 1), 2 * (d + 1), 1),
+  },
+  mobiusPaper: {
+    label: 'Möbius band (paper, flat: rim-parallel lines loop)',
+    build: (d) => paperMobiusMesh(7, 0.6, 16 * (d + 1)),
   },
   mobius3: {
     label: 'Band with 3 half-twists',

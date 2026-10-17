@@ -233,6 +233,17 @@ a vector carried around a vertex returning rotated (holonomy dial).
 - **Geometry (verified)**: the standard parametrisation is NOT developable — K ≈ −1/(4R²) on the centreline,
   more negative at the rim. A flat paper band is a different embedding (Sadowsky 1930; Starostin & van der
   Heijden, Nature Materials 2007) → candidate "paper Möbius" preset.
+- **Paper Möbius (2026-10-18, parked)**. On the smooth band, rim-parallel geodesics run into the rim: the
+  centreline itself has κg = cos(u/2)/R ≠ 0. `paperMobiusMesh` (flat strip, isometric to 1e-10) fixes the
+  geometry: rim-parallel lines loop, mirrored after 1 turn, home after 2 (tested). But it looks PLEATED,
+  because it can only fold along fixed diagonals. A smooth paper band needs rulings that tilt as it twists
+  (rulings ⟂ centreline everywhere ⇒ no twist). Measured: with rulings frozen perpendicular, the length
+  constraints are not even satisfiable. Prototype with sliding rulings (planar quads + free development
+  abscissae + hinge springs): experiments/paper-mobius/sliding-rulings.mjs reaches iso ~3e-4, folds 23° rms,
+  not yet smooth. Proper route = the literature's discrete developable/elastic-strip solvers
+  (Starostin–van der Heijden 2007 equilibrium equations; discrete elastic rods/strips; Sadowsky functional).
+  Alvaro's Equalizer band (toxiclibs springs with rest length = initial formula-band lengths) never asked for
+  developability, so it never crumpled.
 - **Handedness fix (found via the band)**: on non-orientable surfaces some chart transitions are reflections
   (det M = −1), so "turn left" must be multiplied by a running handedness. Frames carry `hand`;
   turtle/Fermi/projection respect it. Seam-straddling square: gap 0.40 before → 0.0017 after.
@@ -256,7 +267,7 @@ two (test `life.test.mjs`). Chirality is a real, visible state here.
   `cellAdjacency` can provide once the surface is partitioned by Voronoi cells.
 - **The neighbourhood is no longer 8.** A relaxed point set is mostly hexagonal (6 neighbours), and topology
   forces defects: Euler gives Σ(6 − nᵢ) = 6χ, so a sphere carries net 12 "pentagons" (5-neighbour cells).
-  Torus: possibly zero. Life therefore *feels the curvature*: the defects sit where K concentrates, and
+  Torus: possibly zero. Life therefore _feels the curvature_: the defects sit where K concentrates, and
   the rule behaves differently there. Curvature becomes visible in the dynamics (link with §2).
 - **Which rules?**
   - Hexagonal Life literature: e.g. B2/S34 on the hex grid (Bays, "Cellular automata in the triangular
