@@ -446,6 +446,9 @@ export function torusMesh(R = 1.5, r = 0.5, nu = 32, nv = 16) {
   return { positions, triangles };
 }
 
+// (The twisted rectangular tube is being developed in experiments/twisted-tube/ and will be promoted here
+// once verified.)
+
 // Open cylinder (no caps): a developable surface with two boundary loops.
 export function cylinderMesh(radius = 1, height = 2, n = 24, rings = 1) {
   const positions = [];

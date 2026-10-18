@@ -6,6 +6,8 @@ import {
   cylinderMesh,
   torusMesh,
   kleinBottleMesh,
+  cubeMesh,
+  planeMesh,
   cellAdjacency,
   meshStats,
   orientTriangles,
@@ -41,23 +43,43 @@ ui.collapse.onclick = () => {
   ui.collapse.textContent = ui.panel.classList.contains('collapsed') ? '+' : '–';
 };
 
-// cell (i around, j across) -> quad index in the generator's triangle order; sizes chosen for ~square cells
+// Each surface provides the mesh and the cell layout: `cells` = triangle index -> cell index (2 triangles per
+// quad, generator order), `dims` = [across, down] for seeding, `seedAt` = where to place the pattern cells.
+const quadPairs = (m) => m.triangles.map((_, t) => t >> 1);
+const cubeCells = (n) => (m) => m.triangles.map((_, t) => t >> 1); // 6·n² quads, face-major
 const SURFACES = {
   mobius: {
     build: (nu, nv) => mobiusBandMesh(1.2, Math.min(1.5, (2 * Math.PI * 1.2 * nv) / nu), nu, nv, 1),
-    cell: (i, j, nu, nv) => i * nv + j,
+    cells: quadPairs,
+    dims: (nu, nv) => [nu, nv],
   },
   cylinder: {
     build: (nu, nv) => cylinderMesh(1, Math.min(3, (2 * Math.PI * nv) / nu), nu, nv),
-    cell: (i, j, nu) => j * nu + i,
+    cells: quadPairs,
+    dims: (nu, nv) => [nu, nv],
   },
   torus: {
     build: (nu, nv) => torusMesh(1.3, Math.min(0.75, (1.3 * nv) / nu), nu, nv),
-    cell: (i, j, nu, nv) => i * nv + j,
+    cells: quadPairs,
+    dims: (nu, nv) => [nu, nv],
   },
   klein: {
     build: (nu, nv) => kleinBottleMesh(1, 0.4, nu, nv),
-    cell: (i, j, nu, nv) => i * nv + j,
+    cells: quadPairs,
+    dims: (nu, nv) => [nu, nv],
+  },
+  cube: {
+    build: (nu, nv) => cubeMesh(2, Math.max(2, Math.round(nu / 10))),
+    cells: quadPairs,
+    dims: (nu, nv) => {
+      const n = Math.max(2, Math.round(nu / 10));
+      return [6 * n, n];
+    },
+  },
+  plane: {
+    build: (nu, nv) => planeMesh(Math.min(3, (2 * nu) / nv), 2, nu, nv),
+    cells: quadPairs,
+    dims: (nu, nv) => [nu, nv],
   },
 };
 
@@ -68,7 +90,7 @@ const ALIVE = new THREE.Color('#ffb45d');
 const DEAD = new THREE.Color('#1b2130');
 const GLOW = new THREE.Color('#7a3d8f');
 
-let mesh, adjacency, alive, next, heat, rule, nu, nv, cellMesh, borders, generation, stats, orientable;
+let mesh, adjacency, alive, next, heat, rule, nu, nv, cellMesh, borders, generation, stats, orientable, cellOf, dims;
 let running = true;
 let acc = 0;
 
@@ -77,11 +99,9 @@ function build() {
   nv = parseInt(ui.nv.value, 10);
   const S = SURFACES[ui.surf.value];
   mesh = S.build(nu, nv);
-  adjacency = cellAdjacency(
-    mesh,
-    mesh.triangles.map((_, t) => t >> 1),
-    { by: ui.nbh.value },
-  );
+  cellOf = S.cells(mesh);
+  adjacency = cellAdjacency(mesh, cellOf, { by: ui.nbh.value });
+  dims = S.dims(nu, nv);
   stats = meshStats(mesh);
   orientable = orientTriangles(structuredClone(mesh)).orientable;
   const n = adjacency.length;
@@ -135,14 +155,18 @@ function seed() {
   alive.fill(0);
   heat.fill(0);
   generation = 0;
-  const S = SURFACES[ui.surf.value];
   const kind = ui.seed.value;
   if (kind === 'random') for (let c = 0; c < alive.length; c++) alive[c] = Math.random() < 0.3 ? 1 : 0;
   else if (PATTERNS[kind]) {
-    const j0 = Math.max(0, Math.floor(nv / 2) - 2);
+    // place the pattern near the middle of the first face/row, as (di, dj) offsets in cell space
+    const nCells = adjacency.length;
+    const j0 = Math.max(0, Math.floor(dims[1] / 2) - 2);
     for (const [di, dj] of PATTERNS[kind]) {
       const j = j0 + dj;
-      if (j < nv) alive[S.cell(di % nu, j, nu, nv)] = 1;
+      if (j < 0 || j >= dims[1]) continue;
+      // cell index: rows of quads in generator order (face-major for the cube)
+      const c = Math.floor((di % Math.max(1, Math.floor(nCells / dims[1]))) * dims[1] + j);
+      if (c < nCells) alive[c] = 1;
     }
   }
   setRule();
@@ -181,7 +205,7 @@ function readout() {
   ui.readout.textContent =
     `${ui.surf.options[ui.surf.selectedIndex].text}: χ=${stats.euler}  ${stats.closed ? 'closed' : 'open'}  ` +
     `${orientable ? 'orientable' : 'NON-orientable'}\n` +
-    `${nu}×${nv} = ${alive.length} cells   neighbour counts: ${Object.entries(hist)
+    `${dims[0]}×${dims[1]} = ${alive.length} cells   neighbour counts: ${Object.entries(hist)
       .map(([k, v]) => `${k}×${v}`)
       .join('  ')}\n` +
     `rule ${rule.text}   generation ${generation}   population ${pop}`;
@@ -200,7 +224,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   );
   const hit = raycaster.intersectObject(cellMesh)[0];
   if (!hit) return;
-  const c = hit.faceIndex >> 1;
+  const c = cellOf[hit.faceIndex];
   alive[c] ^= 1;
   heat[c] = alive[c];
   paint();

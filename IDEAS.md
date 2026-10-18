@@ -253,11 +253,12 @@ a vector carried around a vertex returning rotated (holonomy dial).
 
 ## 8. Game of Life on a surface (Alvaro, 2026-10-17)
 
-**Built (demos/life)**: a rectangular global grid wrapped on a cylinder, torus, Möbius band or Klein bottle.
-Neighbours come from the mesh (`cellAdjacency`: cells sharing a vertex = Moore 8, sharing an edge = von
-Neumann 4). So the twist needs no special code, and the rim cells have 5 neighbours. Verified: on the Möbius
-band a lightweight spaceship comes back **mirror-imaged** (row j → nv−1−j) after one loop and identical after
-two (test `life.test.mjs`). Chirality is a real, visible state here.
+**Built (demos/life)**: a rectangular global grid wrapped on a cylinder, torus, Möbius band, Klein bottle,
+cube or flat square. Neighbours come from the mesh (`cellAdjacency`: cells sharing a vertex = Moore 8, sharing
+an edge = von Neumann 4). So the twist needs no special code, rim cells have 5 neighbours, and on the cube the
+24 corner cells have 7 (the diagonal neighbour across a cube vertex is shared by 3 faces). Verified: on the
+Möbius band a lightweight spaceship comes back **mirror-imaged** (row j → nv−1−j) after one loop and identical
+after two (test `life.test.mjs`). Chirality is a real, visible state here.
 
 **Noted, not built:**
 
