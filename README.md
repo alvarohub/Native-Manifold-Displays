@@ -28,10 +28,22 @@ firmware that _consume_ this library) — lives at
   each particle reads; "forces off" + shift-click = a free particle tracing a geodesic.
 - `demos/imprint/` — **Demo D2**: text / SVG / L-system fractals drawn on any mesh in the four
   imprint modes, movable frame, closure gaps, Darboux/OBJ export.
-- `demos/life/` — Game of Life on a cylinder / torus / Möbius band / Klein bottle;
-  neighbours derived from the mesh (`cellAdjacency`).
+- `demos/life/` — Life-like cellular automata on preset quad grids (cylinder,
+  torus, Möbius band, Klein bottle, cube and flat square), or one cell per
+  triangle on other presets and imported OBJ/STL surfaces. Neighbours are
+  derived from mesh connectivity (`cellAdjacency`).
   Run `python3 -m http.server 8001` from the repo root and open
   `http://localhost:8001/demos/particles/`, `.../demos/imprint/` or `.../demos/life/`.
+- All three demos use the surface catalog in `demos/shared/meshes.js`,
+  including **Stanford bunny (3,674 triangles)**. Its local
+  [OBJ file](demos/assets/bunny.obj) can also be selected with **Load mesh**
+  or dropped onto any demo to test import. The bunny has fixed resolution;
+  detail/row/column controls do not resample it. Life switches grid-only seeds
+  to **random 30%** for triangle layouts; click cells to edit, or choose empty.
+  Start with vertex neighbours and B3/S23 to see activity; edge neighbours
+  give three neighbours per closed triangle and very different dynamics.
+  Neither mode promises classic Conway gliders. Updates run on the CPU;
+  rendering uses WebGL. See [asset provenance](docs/REFERENCES.md#sample-mesh-stanford-bunny).
 - Projects that will build on this library (each in its own repo): `docs/PROJECTS_USING_THE_LIBRARY.md`.
 - `tests/` — `node tests/run.mjs` (Node selftests + the lab selftest).
 - `firmware-lib/` — the hardware display layer (`cube_display`): virtual

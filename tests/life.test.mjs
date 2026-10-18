@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { assert } from './assert.mjs';
 import { mobiusBandMesh, torusMesh, cylinderMesh, kleinBottleMesh, cellAdjacency } from '../manifold-core/index.js';
 import { parseRule, lifeStep, PATTERNS } from '../demos/life/life.js';
@@ -6,6 +7,21 @@ const quads = (m) => m.triangles.map((_, t) => t >> 1);
 const counts = (adj) => [...new Set(adj.map((a) => a.length))].sort().join(',');
 
 export const tests = {
+  'Life sliders: both allow 128 cells, preserving minimums, steps and defaults'() {
+    const html = readFileSync(new URL('../demos/life/index.html', import.meta.url), 'utf8');
+    for (const [id, min, step, value] of [
+      ['nu', 12, 2, 80],
+      ['nv', 4, 1, 14],
+    ]) {
+      const input = html.match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`))?.[0];
+      assert(input, `missing ${id} slider`);
+      for (const [attr, expected] of Object.entries({ type: 'range', min, max: 128, step, value })) {
+        assert(input.includes(`${attr}="${expected}"`), `${id}: expected ${attr}="${expected}"`);
+      }
+      assert((128 - min) % step === 0, `${id}: 128 must be reachable by stepping`);
+    }
+  },
+
   'cellAdjacency: Moore/von Neumann from shared vertices/edges; Möbius seam flips, rim has 5'() {
     const nu = 60;
     const nv = 12;

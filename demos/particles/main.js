@@ -232,6 +232,7 @@ function sequentialColor(t, out) {
 
 function buildSurface() {
   const key = ui.mesh.value;
+  ui.subdiv.disabled = key === 'custom' || !!MESHES[key].fixedResolution;
   const d = parseInt(ui.subdiv.value, 10);
   let mesh;
   if (key === 'custom' && customMesh) mesh = customMesh;

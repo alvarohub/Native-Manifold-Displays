@@ -1,18 +1,13 @@
-// Demo — Game of Life on a surface. The universe is a quad grid wrapped on a cylinder / torus / Möbius band /
-// Klein bottle; the library builds the mesh and derives each cell's neighbours from shared vertices.
+// Game of Life on preset quad grids or triangle cells of any imported surface.
 import { createViewer } from '../shared/viewer.js';
 import {
-  mobiusBandMesh,
-  cylinderMesh,
-  torusMesh,
-  kleinBottleMesh,
-  cubeMesh,
-  planeMesh,
   cellAdjacency,
   meshStats,
   orientTriangles,
 } from '../../manifold-core/index.js';
+import { fillMeshSelect, importMeshFile, describeImport, wireMeshImport, setCustomOption } from '../shared/meshes.js';
 import { parseRule, lifeStep, PATTERNS } from './life.js';
+import { buildLifeSurface, cellBorderEdges } from './surfaces.js';
 
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(
@@ -31,6 +26,9 @@ const ui = Object.fromEntries(
     'readout',
     'panel',
     'collapse',
+    'loadMesh',
+    'meshNote',
+    'layoutHint',
   ].map((id) => [id, $(id)]),
 );
 for (const id of ['nu', 'nv', 'speed']) {
@@ -43,45 +41,9 @@ ui.collapse.onclick = () => {
   ui.collapse.textContent = ui.panel.classList.contains('collapsed') ? '+' : '–';
 };
 
-// Each surface provides the mesh and the cell layout: `cells` = triangle index -> cell index (2 triangles per
-// quad, generator order), `dims` = [across, down] for seeding, `seedAt` = where to place the pattern cells.
-const quadPairs = (m) => m.triangles.map((_, t) => t >> 1);
-const cubeCells = (n) => (m) => m.triangles.map((_, t) => t >> 1); // 6·n² quads, face-major
-const SURFACES = {
-  mobius: {
-    build: (nu, nv) => mobiusBandMesh(1.2, Math.min(1.5, (2 * Math.PI * 1.2 * nv) / nu), nu, nv, 1),
-    cells: quadPairs,
-    dims: (nu, nv) => [nu, nv],
-  },
-  cylinder: {
-    build: (nu, nv) => cylinderMesh(1, Math.min(3, (2 * Math.PI * nv) / nu), nu, nv),
-    cells: quadPairs,
-    dims: (nu, nv) => [nu, nv],
-  },
-  torus: {
-    build: (nu, nv) => torusMesh(1.3, Math.min(0.75, (1.3 * nv) / nu), nu, nv),
-    cells: quadPairs,
-    dims: (nu, nv) => [nu, nv],
-  },
-  klein: {
-    build: (nu, nv) => kleinBottleMesh(1, 0.4, nu, nv),
-    cells: quadPairs,
-    dims: (nu, nv) => [nu, nv],
-  },
-  cube: {
-    build: (nu, nv) => cubeMesh(2, Math.max(2, Math.round(nu / 10))),
-    cells: quadPairs,
-    dims: (nu, nv) => {
-      const n = Math.max(2, Math.round(nu / 10));
-      return [6 * n, n];
-    },
-  },
-  plane: {
-    build: (nu, nv) => planeMesh(Math.min(3, (2 * nu) / nv), 2, nu, nv),
-    cells: quadPairs,
-    dims: (nu, nv) => [nu, nv],
-  },
-};
+let customMesh = null;
+fillMeshSelect(ui.surf);
+ui.surf.value = 'mobius';
 
 const { THREE, renderer, scene, camera, controls } = createViewer($('app'), { cameraPos: [0.4, -3.4, 3.0] });
 if (window.innerWidth < 900) ui.collapse.click();
@@ -97,11 +59,8 @@ let acc = 0;
 function build() {
   nu = parseInt(ui.nu.value, 10);
   nv = parseInt(ui.nv.value, 10);
-  const S = SURFACES[ui.surf.value];
-  mesh = S.build(nu, nv);
-  cellOf = S.cells(mesh);
+  ({ mesh, cellOf, dims } = buildLifeSurface(ui.surf.value, nu, nv, customMesh));
   adjacency = cellAdjacency(mesh, cellOf, { by: ui.nbh.value });
-  dims = S.dims(nu, nv);
   stats = meshStats(mesh);
   orientable = orientTriangles(structuredClone(mesh)).orientable;
   const n = adjacency.length;
@@ -109,8 +68,23 @@ function build() {
   next = new Uint8Array(n);
   heat = new Float32Array(n);
 
-  if (cellMesh) scene.remove(cellMesh, borders);
-  // non-indexed: one colour per cell (its two triangles), flat shading
+  ui.nu.disabled = !dims;
+  ui.nv.disabled = !dims || ui.surf.value === 'cube';
+  for (const option of ui.seed.options) option.disabled = !dims && !!PATTERNS[option.value];
+  if (!dims && PATTERNS[ui.seed.value]) ui.seed.value = 'random';
+  ui.nbh.options[0].textContent = dims ? 'share a corner (Moore-like)' : 'share a vertex (variable degree)';
+  ui.nbh.options[1].textContent = dims ? 'share an edge (von Neumann-like)' : 'share an edge (3 on closed triangles)';
+  ui.layoutHint.textContent = dims
+    ? 'Preset quad cells: neighbours come from mesh connectivity, not a Fermi frame. Cube uses only "cells around".'
+    : 'One triangle = one cell; fixed preset resolution or uploaded mesh resolution. No global rows/columns or classic grid seeds. B3/S23 runs on this graph, but Conway gliders are not guaranteed.';
+
+  if (cellMesh) {
+    scene.remove(cellMesh, borders);
+    cellMesh.geometry.dispose();
+    cellMesh.material.dispose();
+    borders.geometry.dispose();
+    borders.material.dispose();
+  }
   const pos = new Float32Array(mesh.triangles.length * 9);
   mesh.triangles.forEach((tri, t) => tri.forEach((v, k) => pos.set(mesh.positions[v], 9 * t + 3 * k)));
   const geo = new THREE.BufferGeometry();
@@ -128,19 +102,8 @@ function build() {
       polygonOffsetUnits: 1,
     }),
   );
-  // quad outlines (skip the diagonal): tri0 = [a,b,c], tri1 = [a,c,d]
   const seg = [];
-  for (let c = 0; c < n; c++) {
-    const [a, b, cc] = mesh.triangles[2 * c];
-    const d = mesh.triangles[2 * c + 1][2];
-    for (const [p, q] of [
-      [a, b],
-      [b, cc],
-      [cc, d],
-      [d, a],
-    ])
-      seg.push(...mesh.positions[p], ...mesh.positions[q]);
-  }
+  for (const [a, b] of cellBorderEdges(mesh, cellOf)) seg.push(...mesh.positions[a], ...mesh.positions[b]);
   borders = new THREE.LineSegments(
     new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(seg, 3)),
     new THREE.LineBasicMaterial({ color: 0x3a4660, transparent: true, opacity: 0.6 }),
@@ -189,10 +152,11 @@ function step() {
 const tmp = new THREE.Color();
 function paint() {
   const col = cellMesh.geometry.getAttribute('color');
-  for (let c = 0; c < alive.length; c++) {
+  for (let t = 0; t < cellOf.length; t++) {
+    const c = cellOf[t];
     if (alive[c]) tmp.copy(ALIVE);
     else tmp.copy(DEAD).lerp(GLOW, Math.min(1, heat[c] * 0.9));
-    for (let k = 0; k < 6; k++) col.setXYZ(6 * c + k, tmp.r, tmp.g, tmp.b);
+    for (let k = 0; k < 3; k++) col.setXYZ(3 * t + k, tmp.r, tmp.g, tmp.b);
   }
   col.needsUpdate = true;
 }
@@ -205,13 +169,13 @@ function readout() {
   ui.readout.textContent =
     `${ui.surf.options[ui.surf.selectedIndex].text}: χ=${stats.euler}  ${stats.closed ? 'closed' : 'open'}  ` +
     `${orientable ? 'orientable' : 'NON-orientable'}\n` +
-    `${dims[0]}×${dims[1]} = ${alive.length} cells   neighbour counts: ${Object.entries(hist)
+    `${dims ? `${dims[0]}×${dims[1]} = ${alive.length} quad cells` : `${alive.length} triangle cells`}   neighbour counts: ${Object.entries(hist)
       .map(([k, v]) => `${k}×${v}`)
       .join('  ')}\n` +
     `rule ${rule.text}   generation ${generation}   population ${pop}`;
 }
 
-// click to toggle a cell (three.js faceIndex = triangle index; two triangles per cell)
+// three.js faceIndex is mapped through the active cell layout.
 const raycaster = new THREE.Raycaster();
 let downAt = null;
 renderer.domElement.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
@@ -231,6 +195,24 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 });
 
 ui.surf.onchange = ui.nu.onchange = ui.nv.onchange = ui.nbh.onchange = build;
+wireMeshImport({
+  button: ui.loadMesh,
+  onFile: async (file) => {
+    try {
+      const imported = await importMeshFile(file);
+      if (imported.report.nonManifoldEdges || !imported.mesh.triangles.length) {
+        throw new Error('Use a surface with triangles and no non-manifold edges');
+      }
+      customMesh = imported.mesh;
+      setCustomOption(ui.surf, `${file.name} (${imported.report.triangles} tri)`);
+      ui.meshNote.textContent = describeImport(imported);
+      build();
+    } catch (err) {
+      ui.meshNote.textContent = `Import failed: ${err.message}`;
+      console.error('Mesh import failed', err);
+    }
+  },
+});
 ui.seed.onchange = ui.reset.onclick = seed;
 ui.rule.onchange = setRule;
 ui.grid.onchange = () => (borders.visible = ui.grid.checked);

@@ -126,6 +126,7 @@ let dirty = true;
 // ---------------------------------------------------------------- surface
 function buildSurface() {
   const key = ui.mesh.value;
+  ui.subdiv.disabled = key === 'custom' || !!MESHES[key].fixedResolution;
   const d = parseInt(ui.subdiv.value, 10);
   const mesh = key === 'custom' && customMesh ? customMesh : MESHES[key].build(d);
   surface = Surface.fromMesh(mesh, { name: key });

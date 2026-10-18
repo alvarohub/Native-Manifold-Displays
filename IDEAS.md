@@ -282,3 +282,72 @@ after two (test `life.test.mjs`). Chirality is a real, visible state here.
   on the Möbius band they return mirrored (inversion / retrograde in musical terms?).
 - **Möbius + music** (Equalizer project): a CA on the band where the across-band coordinate is pitch. A
   glider coming back mirrored = the melody inverted. Belongs to that project's repo.
+
+### Generic Life on imported surfaces (2026-10-18, design only)
+
+**Implemented baseline (2026-10-18):** the Life demo now supports one cell per triangle on uploaded
+OBJ/STL meshes and shared presets without a quad layout. The bundled low-resolution Stanford bunny
+(3,674 triangles) is available in all three demos. Existing Life quad layouts remain unchanged.
+There is no relaxation, Voronoi construction or connectivity optimization in this baseline.
+
+Separate three objects: the **support surface** (the imported triangle mesh), the **cell layout**
+(regions covering that surface), and the **automaton** (states and a neighbour graph). The support
+triangles need not be the automaton's cells. `lifeStep` already consumes a graph; the current demo's
+triangle pairing (`t >> 1`) and row/column pattern placement are preset-specific.
+
+The presets use rectangular parameter domains with seam identifications, or separate cube-face grids,
+not a single globally consistent tangent frame. Their connectivity makes square-grid patterns convenient.
+Imprint instead transports a local drawing frame across arbitrary mesh triangles; it does not construct
+a non-overlapping cell partition of the whole surface. Extending an imprinted grid everywhere can produce
+distortion, overlaps, gaps and frame holonomy; local drawing is not a global meshing algorithm.
+
+Possible generic layouts:
+
+- **Native triangles:** one input triangle per cell, neighbours from shared edges or vertices. This needs
+  no UVs and is the simplest import baseline, but cell areas and degrees depend on the artist's tessellation.
+  B3/S23 still executes; classic square-grid gliders are not guaranteed. Arbitrary consecutive triangles
+  must not be paired as if they were quads.
+- **Independent intrinsic tessellation:** choose a target cell spacing, sample sites on the surface,
+  relax toward uniform intrinsic coverage, then partition by geodesic nearest site. Freeze the resulting
+  Voronoi cells and their shared-boundary adjacency before evolving states. Refining the support mesh
+  improves the geometric approximation without intentionally changing automaton resolution. Mostly
+  hexagonal cells suggest a different rule family, not an automatic preservation of Conway Life.
+  Robust geodesic partitioning, region boundaries and rendering are not implemented.
+- **Quad remeshing:** if square-grid Life is the requirement, construct an approximately uniform quad
+  layout using a tangent cross field and patch transitions. Generic topology/curvature requires allowing
+  singularities, distortion or seams; there is no universal defect-free square-grid construction.
+
+For a surface-first automaton, also consider area-weighted neighbourhoods within an intrinsic radius
+(SmoothLife/Lenia-style), rather than attaching a fixed neighbour count to arbitrary triangles. These are
+different models, not guarantees of Conway patterns. Across folded or self-intersecting embeddings, use
+intrinsic connectivity/distance, not 3D proximity. Import still requires valid surface topology and an
+explicit boundary policy. Seeding on irregular cells would use picking, random states or a local
+imprinted mask rather than global integer row/column offsets.
+
+### Regularizing connectivity by local edits (2026-10-18, design only)
+
+Alvaro proposes merging/splitting cells of an imported triangulation to reduce deviation from a target
+neighbour count, possibly using simulated annealing while retaining as much of the original as possible.
+Related established methods: valence equalization in isotropic remeshing; cross-field quad remeshing;
+centroidal Voronoi relaxation; degree-constrained graph editing. References are in REFERENCES.md.
+
+Specify the graph first: triangle **vertex valence** tends toward 6, but a triangle **cell** has only
+3 edge neighbours. Conway's 8 is corner-inclusive adjacency on a quad layout, not 8 boundary-sharing
+neighbours. For a closed, disk-cell tessellation with three cells meeting at each vertex,
+sum(6 - cellDegree) = 6 * EulerCharacteristic. Thus on a sphere the average edge-neighbour degree is
+6 - 12/N; targeting 8 everywhere cannot succeed in that model. Boundary and non-generic junctions change
+the counting. Quad layouts naturally supply 8 corner-inclusive neighbours away from exceptional vertices.
+
+Possible experiment: keep the imported support surface fixed and optimize a cell partition over it.
+Propose local cell merges, cell splits and boundary reassignments; preserve valid disk cells, surface
+topology and boundaries as hard constraints. Minimize degree error plus area variance, non-compactness
+and deviation from the initial partition. Set a target cell count/area so merging everything is not an
+escape. Annealing accepts uphill energy changes with probability exp(-deltaE/T); compare against a
+greedy baseline. This is a proposed experiment, not a claim that these ingredients guarantee convergence
+or square-grid behaviour. If remeshing the support itself, projection alone does not guarantee intrinsic
+metric preservation; constrain approximation error and features separately.
+
+An alternative is to keep the cell partition but optimize a symmetric local interaction graph (e.g.
+degree-constrained edge selection among intrinsically nearby candidates). That can target 8 without
+requiring 8 shared boundaries, but selected links are interactions, not necessarily cell contacts, and
+equal degree alone does not recover a square lattice or its gliders.

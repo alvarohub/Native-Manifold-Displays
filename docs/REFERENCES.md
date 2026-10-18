@@ -64,6 +64,26 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
 
 ## 2. Software we learned from (not dependencies)
 
+### Cell layouts and connectivity optimization (research directions)
+
+- **Botsch, M., Kobbelt, L.** — _A Remeshing Approach to Multiresolution Modeling_ (2004).
+  <https://diglib.eg.org/handle/10.2312/SGP.SGP04.185-196>.
+  Local split/collapse/flip operations and relaxation; practical algorithm overview:
+  <https://www.pmp-library.org/remeshing.html>. Valence equalization concerns mesh vertices,
+  not automatically the neighbour count of face-cells.
+- **Bommes, D., Zimmer, H., Kobbelt, L.** — _Mixed-Integer Quadrangulation_, ACM TOG 2009.
+  <https://doi.org/10.1145/1531326.1531373>. Direction-field-guided quad layouts with singularities;
+  relevant to retaining square-grid-like corner neighbourhoods.
+- **Du, Q., Faber, V., Gunzburger, M.** — _Centroidal Voronoi Tessellations: Applications and
+  Algorithms_, SIAM Review 1999. <https://doi.org/10.1137/S0036144599352836>.
+  Coverage-based relaxation rather than a guarantee of fixed cell degree; intrinsic surface
+  versions require geodesic distances and surface-constrained updates.
+- **Mathieson, L., Szeider, S.** — _Editing graphs to satisfy degree constraints: A parameterized
+  approach_, JCSS 2012. <https://doi.org/10.1016/j.jcss.2011.02.001>.
+  Complexity of degree-constrained graph editing, not a surface-preserving remeshing algorithm.
+
+### Existing software references
+
 - **geometry-central** (Sharp, Crane et al.) — <https://geometry-central.net>.
   Production-grade intrinsic geometry on halfedge meshes; our API vocabulary
   (`traceGeodesic`, `logMap`, `SurfacePoint`) is borrowed from it. See
@@ -71,6 +91,21 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
 - **toxiclibs.js** (Verlet physics, used in myBlobChain) and **opentype.js**
   (glyph outlines) — the text-to-contours pipeline D2 reuses.
 - **three.js** — rendering in the demos only.
+
+### Sample mesh: Stanford bunny
+
+- Original scan/model: **Stanford Computer Graphics Laboratory**,
+  [Stanford 3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/#bunny).
+- Low-resolution distribution: [Mikola Lysenko's `bunny`](https://github.com/mikolalysenko/bunny).
+  Its [package metadata](https://github.com/mikolalysenko/bunny/blob/master/package.json)
+  declares **Public Domain**.
+- Bundled data source: [`index.js` at revision
+  `d70c5da8e02ee56d20ec3360e0859f37fada81ba`](https://github.com/mikolalysenko/bunny/blob/d70c5da8e02ee56d20ec3360e0859f37fada81ba/index.js).
+  Converted its `positions` and `faces` arrays to [bunny.obj](../demos/assets/bunny.obj),
+  rotating Y-up to Z-up with `(x, y, z) -> (x, -z, y)`. No further decimation.
+  **1,839 vertices / 3,674 triangles**, one closed orientable component,
+  Euler characteristic 2; no non-manifold edges or degenerate faces in the import check.
+  Demos normalize the mesh to their viewing scale via the same importer used for uploads.
 
 ## 3. Alvaro's related projects (the portfolio thread)
 

@@ -156,32 +156,30 @@
         <legend>Universe</legend>
         <div class="row">
           <label for="surf">surface</label
-          ><select id="surf">
-            <option value="mobius" selected>Möbius band</option>
-            <option value="cylinder">cylinder</option>
-            <option value="torus">torus</option>
-            <option value="klein">Klein bottle</option>
-            <option value="cube">cube</option>
-            <option value="plane">flat square (the classic board)</option>
-          </select>
+          ><select id="surf"></select>
         </div>
+        <div class="buttons">
+          <button id="loadMesh">Load mesh… (.obj/.stl)</button>
+        </div>
+        <div class="hint" id="meshNote" role="status"></div>
         <div class="row">
           <label for="nu">cells around</label
-          ><input id="nu" type="range" min="12" max="160" step="2" value="80" /><output id="nuOut"></output>
+          ><input id="nu" type="range" min="12" max="128" step="2" value="80" /><output id="nuOut"></output>
         </div>
         <div class="row">
-          <label for="nv">cells across</label><input id="nv" type="range" min="4" max="48" step="1" value="14" /><output
+          <label for="nv">cells across</label><input id="nv" type="range" min="4" max="128" step="1" value="14" /><output
             id="nvOut"
           ></output>
         </div>
         <div class="row">
           <label for="nbh">neighbours</label
           ><select id="nbh">
-            <option value="vertex" selected>share a corner (Moore, 8)</option>
-            <option value="edge">share an edge (von Neumann, 4)</option>
+            <option value="vertex" selected>share a corner (Moore-like)</option>
+            <option value="edge">share an edge (von Neumann-like)</option>
           </select>
         </div>
       </fieldset>
+      <div class="hint" id="layoutHint"></div>
       <fieldset>
         <legend>Rule & seed</legend>
         <div class="row"><label for="rule">rule</label><input id="rule" type="text" value="B3/S23" /></div>
@@ -206,8 +204,8 @@
         </div>
         <div class="row check"><label for="grid">cell borders</label><input id="grid" type="checkbox" checked /></div>
         <div class="hint">
-          click a cell to toggle it. The neighbourhood comes from the mesh (shared vertices), so the Möbius twist and
-          the rim (5 neighbours) need no special code.
+          Click a cell to toggle it. Neighbours share a vertex or an edge, depending on the selector.
+          Seam connections and missing neighbours at the rim follow from mesh connectivity.
         </div>
       </fieldset>
       <fieldset>
