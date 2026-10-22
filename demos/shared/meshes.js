@@ -7,6 +7,8 @@ import {
   cylinderMesh,
   planeMesh,
   tetrahedronMesh,
+  octahedronMesh,
+  dodecahedronMesh,
   kleinBottleMesh,
   mobiusBandMesh,
   paperMobiusMesh,
@@ -34,6 +36,10 @@ function loadBunny() {
 
 export const MESHES = {
   icosphere: { label: 'Icosphere', build: (d) => icosphereMesh(Math.min(5, d), 1.2) },
+  tetra: { label: 'Tetrahedron (4 faces)', fixedResolution: true, build: () => tetrahedronMesh(1.1) },
+  octa: { label: 'Octahedron (8 faces)', fixedResolution: true, build: () => octahedronMesh(1.2) },
+  dodeca: { label: 'Dodecahedron (12 pentagonal faces)', fixedResolution: true, build: () => dodecahedronMesh(1.2) },
+  icosa: { label: 'Icosahedron (20 faces)', fixedResolution: true, build: () => icosphereMesh(0, 1.2) },
   bunny: {
     label: 'Stanford bunny (3,674 triangles)',
     fixedResolution: true,
@@ -102,7 +108,6 @@ export const MESHES = {
       dims: (nu, nv) => [nu, nv],
     },
   },
-  tetra: { label: 'Tetrahedron', build: () => tetrahedronMesh(1.1) },
 };
 
 export function fillMeshSelect(select) {

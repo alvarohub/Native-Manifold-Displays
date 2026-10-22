@@ -93,12 +93,18 @@ export function imprint(surface, contours, frame, mode = 'turtle', opts = {}) {
 // the other modes); from there the turtle turns by the planar turning angle and advances by the planar
 // segment length, both scaled.
 export function imprintTurtle(surface, contour, frame) {
+  return traceTurtle(surface, contour, frame).points;
+}
+
+// Full traces retain both sides of every seam for output adapters; placement is a pen-up move.
+export function traceTurtle(surface, contour, frame) {
   const pts = contour.points;
-  if (pts.length === 0) return [];
+  if (pts.length === 0) return { points: [], traces: [], placement: null };
   const first = frameVector(frame, pts[0][0], pts[0][1]);
   const r0 = surface.trace(frame.anchor, first.dir, first.len);
   const out = [r0.end];
-  if (pts.length < 2) return out;
+  const traces = [];
+  if (pts.length < 2) return { points: out, traces, placement: r0 };
   // heading frame transported to the first point; initial travel direction = first planar segment.
   // `hand` tracks the handedness of the current chart relative to the drawing plane.
   let hand = (frame.hand ?? 1) * handOf(r0.M);
@@ -114,6 +120,7 @@ export function imprintTurtle(surface, contour, frame) {
     const b = closedPts[i];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]) * frame.scale;
     const r = surface.trace(cur, dir, len);
+    traces.push(r);
     cur = r.end;
     dir = r.dir;
     hand *= handOf(r.M);
@@ -121,7 +128,7 @@ export function imprintTurtle(surface, contour, frame) {
     const turn = turns[i - 1];
     if (turn !== undefined) dir = apply2(rot2(hand * turn), dir);
   }
-  return out; // for closed contours the last point is the return attempt (see imprint)
+  return { points: out, traces, placement: r0 }; // A closed contour ends at its return attempt.
 }
 
 // Exponential map at the anchor: polar coordinates of each planar point become (direction, geodesic length).

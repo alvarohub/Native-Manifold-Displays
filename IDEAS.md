@@ -351,3 +351,62 @@ An alternative is to keep the cell partition but optimize a symmetric local inte
 degree-constrained edge selection among intrinsically nearby candidates). That can target 8 without
 requiring 8 shared boundaries, but selected links are interactions, not necessarily cell contacts, and
 equal degree alone does not recover a square lattice or its gliders.
+
+## 9. Distances versus displayed paths; shared visualization (2026-10-19)
+
+The bunny exposed a real limitation: a single unfolded copy per face is not a global logarithm map.
+Pair/spring forces still use this approximation; visually correcting a path must not imply that the
+underlying force metric is exact. Investigate robust intrinsic distance/vector methods (heat/vector heat,
+exact polyhedral methods or intrinsic triangulations) as separate geometry work, with cut-locus,
+symmetry, endpoint and performance tests before changing dynamics.
+
+Implemented visualization baseline: shooting reports actual final convergence/error; failed shooting
+uses an explicitly labelled mesh-edge path reaching both particles, not a failed trace or an off-surface
+chord. This is an upper-bound route, not a shortest smooth geodesic. Shared RGBA/width controls and
+nearest-shell front/back compositing now serve all demos. A proper glass/multi-shell renderer would
+need further transparency techniques; do not confuse the nearest-shell display mode with optical
+transmission. Reuse three.js for rendering/picking/lines; do not build another general-purpose 3D engine.
+
+**Correction after review (2026-10-19):** the automatic edge fallback is not
+an acceptable geodesic solution and remains an unresolved implementation
+defect. Distinguish straightest initial-value motion (Polthier–Schmies) from
+globally shortest endpoint paths. The proposed repair is a hardened tracer
+plus a JS MMP solver shared by force distances/directions and visible paths,
+not geometry-central and not visual smoothing. See
+[GEODESIC_MOTION.md, Part III](docs/GEODESIC_MOTION.md#part-iii--straightest-motion-versus-shortest-connections)
+for the vertex/transport audit, alternatives, force law, and acceptance tests.
+
+**Decision update (2026-10-21):** defer exact global endpoint paths rather
+than grow a geometry-central replacement. The `shortestPath` placeholder
+throws explicitly; local approximations remain labeled as such. Reconsider
+backend reuse before implementing a general solver. This does not waive the
+separate straightest-motion/transport correctness work.
+
+## 10. The manifold canvas: creative tools and nonrectangular displays (2026-10-21)
+
+Alvaro's guiding abstraction is **a 2D graphics interface on a non-flat
+canvas**, adapting established tools rather than rebuilding their primitives.
+The support can be an object skin, a deformable display, a water-simulation
+surface, or separate noncoplanar panels distributed through a room/public
+space. The musical cube is an example, not the ultimate scope.
+
+Author-supplied motivation includes Khronos Projector, volume-slicing
+displays and AngleCAD; verify publication details/links before formal
+citation. Known physical poses support calibration, but the desired logical
+seams and treatment of gaps still need specification. The atlas/metric,
+embedding and emitter/device layout are distinct.
+
+Priority frontend: a p5.js addon and progressively p5-based demos. A logical
+canvas takes a surface; the ordinary p5 canvas defines only its viewport.
+Reuse p5 drawing, SVG/Geomerative-like vector tools and eventually
+Arduino/Adafruit_GFX through adapters. Preserve paths for intrinsic
+continuation and vector/robot output, and use local raster buffers where
+appropriate; neither blindly intercepting global drawing calls nor wrapping
+one flat framebuffer solves every surface operation.
+
+AR/VR, projection and physical displays should consume the same logical
+state without depending on the chosen preview renderer. Dynamic supports
+need explicit isometric/metric/topology update and state-transfer semantics.
+The motivation and architecture are now recorded in
+[LIBRARY_PLAN.md §2.1–2.3](docs/LIBRARY_PLAN.md#21-motivation-the-canvas-is-the-support-not-a-rectangular-viewport);
+these are goals, not implemented integrations.

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>p5 manifold canvas — addon pilot</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 24px; background: #0a0d12; color: #d8dde6; font: 15px system-ui, sans-serif; }
+      main { max-width: 1150px; margin: auto; }
+      h1 { font-size: 23px; }
+      h2 { font-size: 18px; }
+      a { color: #7be0ff; }
+      .sketches { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,360px),1fr)); gap: 18px; }
+      article { background: #111925; border: 1px solid #34465c; border-radius: 10px; padding: 14px; min-width: 0; }
+      .viewport { width: 100%; aspect-ratio: 1; }
+      canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+      .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+      label { display: flex; align-items: center; gap: 6px; }
+      button { background: #26364c; color: inherit; padding: 5px 12px; border: 1px solid #8196b1; border-radius: 4px; }
+      output { display: block; font: 12px ui-monospace, monospace; white-space: pre-wrap; min-height: 3em; }
+      [role=alert] { color: #ff9c8e; }
+      code { color: #ffd27b; overflow-wrap: anywhere; }
+      p { line-height: 1.5; }
+    </style>
+    <script type="importmap">
+      { "imports": { "p5": "https://cdn.jsdelivr.net/npm/p5@2.3.4/lib/p5.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>p5.js manifold-canvas pilot</h1>
+      <p>Two independent p5 WEBGL sketches, two surface canvases. Drag a preview to orbit.
+        A long stroke wraps around four cube faces; a rectangle folds over the top and bottom creases.
+        Changing or clearing one drawing does not change the other.</p>
+      <div class="sketches">
+        <article id="left">
+          <h2>Canvas A — wrapped stroke</h2>
+          <div class="viewport" aria-label="Canvas A preview"></div>
+          <div class="controls">
+            <label>Length <input class="length" type="range" min="1" max="7.2" step="0.1" value="6.4"></label>
+            <label>Colour <input class="colour" type="color" value="#ffd27b"></label>
+            <button class="clear">Clear</button><button class="reset">Reset</button>
+          </div>
+          <output></output><p role="alert"></p>
+        </article>
+        <article id="right">
+          <h2>Canvas B — folded rectangle</h2>
+          <div class="viewport" aria-label="Canvas B preview"></div>
+          <div class="controls">
+            <label>Width <input class="length" type="range" min="1" max="3" step="0.1" value="2.8"></label>
+            <label>Colour <input class="colour" type="color" value="#7be0ff"></label>
+            <button class="clear">Clear</button><button class="reset">Reset</button>
+          </div>
+          <output></output><p role="alert"></p>
+        </article>
+      </div>
+      <h2>What is being tested?</h2>
+      <p><code>createCanvas(width,height,WEBGL)</code> still creates the rectangular preview.
+        <code>createManifoldCanvas(surface,{frame})</code> creates the logical drawing support.
+        Every contour starts from its explicit placement frame: drawing x follows the heading,
+        y follows its perpendicular, and scale converts drawing lengths to surface lengths.</p>
+      <p>This pilot supports opaque strokes with <strong>turtle imprinting</strong>: segment lengths
+        and turning angles are preserved by unfolding across ordinary seams. It does not solve
+        endpoint shortest paths; a planar closed curve need not close on a curved surface.
+        Cone-vertex hits, boundaries and stalled traces are rejected explicitly.
+        Paths retain seam crossings rather than joining sparse endpoints through the object.</p>
+      <p>Native p5 renders this preview; no three.js is loaded. Fills, textures, text, picking,
+        translucent-shell compositing and the full shared surface GUI are not migrated here.
+        Existing demos are unchanged. Tested version: <strong>p5 2.3.4</strong>.
+        See <a href="../../README.md#p5js-addon-pilot">the addon API and limitations</a>.</p>
+      <p id="startup-error" role="alert"></p>
+    </main>
+    <script type="module">
+      import('./main.js').catch(error => {
+        document.querySelector('#startup-error').textContent = `Pilot could not start: ${error.message}`;
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

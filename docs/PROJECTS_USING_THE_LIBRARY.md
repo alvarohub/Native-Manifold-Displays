@@ -25,3 +25,13 @@ re-invented.
   - uses: surface as a reading support (heads reading an embedded score), SurfaceCanvas adapter (IDEAS §4d)
 - **LED cube / Qbots** (physical displays)
   - uses: per-face cell grids, generated integer tables for firmware (`firmware-lib/`)
+- **Deformable and distributed display canvases** (motivation clarified 2026-10-21)
+  - author-supplied lineage: Khronos Projector, volume-slicing displays and AngleCAD;
+    exact publication links remain to be verified before public citation
+  - target: graphics and interactions on object skins, building-scale/distributed panels,
+    and deformable supports; water-surface simulation is a proposed dynamic-support consumer
+  - requires: separation of logical seams/metric from measured physical poses, explicit
+    treatment of gaps, and geometry-update/state-transfer contracts
+  - planned access/output: p5.js creative-coding addon, vector/SVG tool adapters,
+    AR/VR or projection, and a bounded Arduino/GFX subset; not implemented integrations
+  - architecture: [LIBRARY_PLAN.md §2.1–2.3](LIBRARY_PLAN.md#21-motivation-the-canvas-is-the-support-not-a-rectangular-viewport)

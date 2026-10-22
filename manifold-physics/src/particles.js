@@ -1,7 +1,8 @@
 // Point particles confined to a Surface. State per particle: { faceId, x, y, vx, vy, m } in chart
 // coordinates; free motion is the straightest geodesic (surface.trace). Forces are chart-frame vectors
 // accumulated into (fx, fy) by force objects each step; pair forces measure distance along the surface
-// through geodesic disks (surface.develop / logMap), never through ambient space.
+// through approximate unfolded disks (surface.develop / logMap), never through ambient space.
+// One unfolding per face is not an exact global geodesic metric, especially near cut loci or strong curvature.
 // Integrator: semi-implicit Euler with substeps; drag and a temperature (random kicks) for annealing.
 
 export class ParticleSystem {
@@ -133,8 +134,13 @@ export class ParticleSystem {
       p.vy = r.dir[1] * sp;
       p.lastEvents = r.events.length ? r.events : null;
       if (this.trailLength > 0) {
-        p.trail.push(this.surface.to3D(p));
-        if (p.trail.length > this.trailLength) p.trail.shift();
+        // Keep edge crossings: connecting only timestep endpoints cuts through folded surfaces.
+        for (const point of r.polyline) {
+          const q = this.surface.to3D(point);
+          const last = p.trail.at(-1);
+          if (!last || Math.hypot(q[0] - last[0], q[1] - last[1], q[2] - last[2]) > 1e-12) p.trail.push(q);
+        }
+        if (p.trail.length > this.trailLength) p.trail.splice(0, p.trail.length - this.trailLength);
       }
     }
     this.time += h;

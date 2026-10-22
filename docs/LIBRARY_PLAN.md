@@ -7,10 +7,12 @@ demo-first milestones, dense meshes as the primary surface class, hand-rolled
 point-particle physics, demos in-repo under `demos/`. Where the two disagree
 on _what to build next_, the schedule wins; §4 there lists the deviations.
 
-Goal: a reusable library for displays and agents that live **on** a manifold
-(charts + transition maps). First consumers are the two demos of the schedule
-(particles on an arbitrary mesh; 2D curves/text imprinted on a surface); the
-"textured 3D object as musical instrument" is now an optional later host.
+Goal (clarified 2026-10-21): **a 2D graphics interface on a non-flat canvas**,
+for creative coders and physical displays. Reuse existing drawing/typography
+and physics tools; supply surface coordinates, seam continuation and output
+mapping, not another general graphics engine or geometry-central clone.
+Particles, imprint and Life are demonstrations; the musical cube is one
+consumer, not the definition of the library. See §2.1–2.3.
 
 ---
 
@@ -45,11 +47,21 @@ What JS-first honestly costs:
 - Two implementations exist only if/when the C++ port happens; until then
   there is exactly one.
 
-**Geometry-central:** a reference and inspiration, not a dependency and not a
-fork. Its API surface (see §3.1) is the model for hardening our JS geometry
-module. If a dense-mesh display ever materializes, a geometry-central
+**[Geometry-central](REFERENCES.md#geometry-central):** a reference and inspiration, not a dependency and not a
+fork. Its API surface (see §3.1) is a reference for hardening the small geometry
+subset we need. For advanced geometry in a future native host, a geometry-central
 adapter can be added behind an interface — optional, CMake-gated, and only
 in a C++ build.
+
+**Geodesic decision (2026-10-21):** exact global endpoint paths are deferred,
+not a prerequisite for the surface-canvas/adapter work. A correct solver
+would serve both forces and visible connections; graph routes or straightest
+tracing are not substitutes. The earlier candidate JS MMP proposal and tests remain in
+[GEODESIC_MOTION.md, Part III](GEODESIC_MOTION.md#part-iii--straightest-motion-versus-shortest-connections).
+Do not commit to rewriting it: assess an existing backend when needed.
+`Surface.shortestPath()` is a deliberately throwing TODO, not a solver.
+Existing local distance/force approximations remain explicitly approximate;
+their limitations and the cone-transport defect are not excused by this deferral.
 
 **The JS lab** (`experiments/geodesic-surfaces/`) is promoted from
 playground to **executable spec and reference host**: its selftests define
@@ -59,16 +71,223 @@ correct behaviour, and it demos every surface class the library supports.
 
 ## 2. Architecture principles
 
-- **The core is pure intrinsic.** No 3D, no rendering, no heap. 3D embedding
-  is used only at build time (to compute transition maps) and at render time
-  (to place things on screen).
+- **The core has no renderer, DOM, p5.js or device dependency.** Intrinsic
+  state uses charts; embedding data supports mesh import, extrinsic geometry,
+  picking and output mapping. JS is not heap-free; bounded storage is a
+  separate requirement of the future embedded subset.
 - **Rendering, audio, UI are adapters** in the consuming projects.
 - A moving agent's whole state is `{chart, x, y, vx, vy}` — never a 3D
   position (see `GEODESIC_MOTION.md`).
 
+### 2.1 Motivation: the canvas is the support, not a rectangular viewport
+
+Most conventional displays and graphics APIs assume a flat rectangle,
+partly because of manufacturing and addressing constraints. The motivation
+here is to prepare for displays on object skins, buildings, deformable
+supports (including emerging flexible/e-ink technologies), and distributed
+panels in installations. This is a design horizon, not a claim that arbitrary
+stretchable full-surface displays are already generally available.
+
+Alvaro's stated lineage includes **Khronos Projector** and work on deformable
+display supports, **volume-slicing displays**, and the recent **AngleCAD**
+paper, alongside the cube instrument. Record these as author-supplied
+motivation; verify exact publication records/links before a public bibliography.
+The common problem is that a rectangular framebuffer is not a sufficient
+description of the support on which an image or interaction lives.
+
+A logical canvas is a surface/atlas plus its metric, seams and drawing state.
+Its 3D embedding and physical outputs are separate. A viewport of width and
+height merely previews it; an AR/VR view, projector, LED assembly, or e-ink
+device can consume the same logical content. Surface construction should
+accept imported geometry, user-generated geometry and explicit chart
+assemblies, not require an on-screen canvas.
+
+Pieces may be noncoplanar, spatially separated, and tracked. Known poses let
+us calibrate output and identify candidate adjacencies, but **do not determine
+the topology**: the application must specify which boundaries are glued,
+their correspondence, and how a physical gap is crossed (logical seam,
+finite virtual connector, or no connection). Disconnected components remain
+disconnected unless explicitly connected. Rigid chart transitions require
+matching intrinsic edge lengths; arbitrary rescaling needs a different
+metric/mapping contract. A known 3D pose alone does not solve that constraint.
+
+For evolving supports (e.g. a water simulation), distinguish isometric
+re-embedding, metric deformation, and remeshing. Each needs explicit geometry
+revision/cache invalidation and state-attachment rules. Moving a drawing with
+the material surface is not the same as inertial motion on a moving surface.
+These capabilities are future work, not implied by today's static `Surface`.
+
+### 2.2 Scope boundary: not a second geometry-central
+
+[geometry-central](REFERENCES.md#geometry-central) targets general geometry
+processing: mesh data structures, intrinsic algorithms, differential
+operators and sparse numerical machinery. We necessarily overlap in a small
+foundation (surface points, charts, tracing, transport, curvature), but the
+product is different: accessible drawing and interaction on non-flat,
+possibly distributed display supports, with adapters to creative tools and
+physical output. This distinction does not make the overlapping geometry
+novel, nor justify reimplementing a mature algorithm by default.
+
+Keep the JS geometry subset small and tested. Treat advanced distances,
+remeshing and general numerical solvers as capabilities a backend may supply,
+not an expanding checklist for this library. GUI and backend types must not
+leak into the surface-canvas contract. An embedded build may support a fixed
+atlas with precomputed transitions without any dense-mesh solver.
+
+### 2.3 Adapter strategy: reuse tools without pretending all mappings are trivial
+
+The intended split is **surface geometry/continuation → drawing operations
+on a surface → rendering/output adapters**, with physics consuming geometry
+and a separate GUI consuming programmatic visualization settings. Names
+such as `SurfaceCanvas` below describe the wider proposed interface.
+The narrow `ManifoldCanvas` stroke/placement/patch model and `createManifoldCanvas` p5 addon
+now exist as a pilot, not a complete graphics API. One instance owns its state;
+no dependency on a single global sketch,
+browser framebuffer or renderer.
+
+The shared visualization split is now implemented in the three demos:
+`manifold-core.surfaceEdges` provides pure geometry, shared `surfaceStyle`
+validates settings independently of the renderer, `SurfaceView` is the
+DOM-free three.js output adapter, and `surfacePanel` is the shared DOM GUI.
+It preserves demo-owned colour buffers separately from scalar diagnostics.
+This is a visualization interface, not yet a surface drawing canvas.
+See [the API, units and limitations](../README.md#shared-manifold-surface-view).
+
+- **p5.js is a priority creative-coding frontend.** Keep its normal
+  `createCanvas(width,height,WEBGL)` for the preview. Add a separately named
+  `createManifoldCanvas(surface, {frame})` (implemented pilot), taking a support rather
+  than a pixel rectangle. Put drawing operations on that object, with an
+  explicit placement frame and imprint rule. Do not override p5's
+  `createCanvas` signature or silently redirect all global drawing calls.
+  Both global and instance-mode sketches must work; multiple canvases must
+  not share accidental mutable state.
+- **Start with a p5 addon pilot**, using the existing pure JS libraries and
+  documented [addon hooks](REFERENCES.md#p5-adapters). Keep the first supported
+  p5 version explicit; compatibility across major versions needs tests.
+  First show a shape/stroke crossing a seam and verify state independence.
+  Then migrate the demos incrementally to a p5 WEBGL adapter if feature
+  parity is demonstrated. The desired demos are p5 sketches; this is not
+  authorization to rewrite all current demos now. Three.js remains the
+  current tested adapter, not a dependency of the future p5 one.
+  The first pilot is now implemented on p5 2.3.4: two independent sketches,
+  explicit placement, opaque turtle strokes with retained seam crossings,
+  global/instance-mode registration and automatic sketch cleanup. Its state
+  model has no p5/DOM dependency. Real GPU tests check front/rear occlusion
+  and style restoration. Vertex/boundary hits fail explicitly rather than
+  concealing the unresolved cone-transport issue. See
+  [the pilot contract and limitations](../README.md#p5js-addon-pilot).
+  Follow-up classic `setup`/`draw` examples now reuse native `p5.Graphics`
+  shapes/text on independently transported placements: small isometric
+  unfolded patches on a cube and bounded tangent-plane projected patches on
+  a torus. A companion sketch takes p5 font outlines and generated SVG path
+  data through the existing ink parser. Patch geometry stays renderer-free,
+  is clipped to actual source triangles and rejects missing/overlapping sheets.
+  This is not full raster/SVG compatibility or migration of the larger demos.
+- **Do not rebuild p5's rasterizer or typography.** Adapt paths/contours or
+  local `p5.Graphics` buffers. These are complementary: semantic paths
+  support intrinsic continuation and robot/vector output; local raster
+  buffers reuse fills/images/fonts but need placement, clipping and seam
+  handling. Texture-mapping one flat image onto a mesh alone does not make
+  its coordinates or dynamics intrinsic. Arbitrary fills, winding/holes,
+  stroke widths, transforms and multi-chart clipping make full compatibility
+  substantially harder than an ES-module wrapper. `line` or `circle` on a
+  curved surface needs a stated construction (turtle, exp-map, etc.); there
+  is no universal distortion-free interpretation of every planar primitive.
+- **SVG / Geomerative-like adapters** expose vector paths, typography,
+  sampling and styles from existing tools, then feed the surface mapping.
+  [Geomerative](REFERENCES.md#geomerative) itself is a Processing/Java
+  library, not a drop-in p5.js dependency. The current SVG path-data parser
+  is not a full SVG document renderer (transforms, fills, CSS, clipping and
+  text are additional concerns). SVG output must distinguish a projected
+  view from per-chart vector drawings plus seam metadata; one flat SVG
+  cannot generally preserve a curved surface's metric globally.
+- **Physics adapters** let engines such as Box2D provide integration/contact
+  machinery where valid. The manifold layer supplies coordinate changes,
+  valid local unfoldings and an explicitly selected interaction metric
+  (surface approximation, future exact path, or ambient chord with specified
+  tangential force conversion). Seam contacts/joints and finite rigid
+  bodies still require the restrictions in §5; a distance callback alone
+  cannot adapt the entire engine. A bounded adapter demo is required before
+  publication; a general-purpose adapter is not promised for the first release.
+- **Arduino/C++ + Adafruit_GFX** is a future small-output target. Reuse GFX
+  primitives/fonts and display drivers through per-patch render targets or
+  emitter routing; supply chart/seam geometry around them. Merely overriding
+  `drawPixel` does not recover a stroke already clipped at a planar
+  framebuffer's boundary. Seam continuation must happen before such clipping,
+  or through explicit neighboring-chart render passes. Prefer precomputed
+  transitions and fixed-capacity buffers; expensive geometry can be prepared
+  off-device. This is a selected portable subset, not a mechanical port of
+  every JS feature or the full dense-mesh pipeline.
+
 ---
 
+### 2.4 Community-facing graphics contract: artwork buffers versus a surface framebuffer
+
+The first p5 version is experimental. The intended user experience is ordinary
+graphics-engine drawing directed to a manifold support at an explicit placement,
+not requiring each sketch to implement texture coordinates or seam routing.
+The support geometry does not choose the placement: the author must choose an
+anchor, tangent heading, scale and mapping rule. Convenience/defaults must not
+conceal these semantics or imply a global flat coordinate system.
+
+**Current implementation:** `p5.Graphics` is a local artwork buffer.
+`display.imprint` computes a bounded patch, clips source mesh triangles, assigns
+image UV coordinates and draws them with `p.texture(image)` into the ordinary
+perspective preview framebuffer. This is texture mapping, but not a persistent
+texture atlas covering the support. There is no interception of arbitrary p5
+draw calls, no per-chart persistent colour storage and no surface `getPixel`.
+Vector contours instead produce on-surface line segments rendered directly in
+the preview; they are not automatically written into image storage either.
+
+**Proposed surface framebuffer:** persistent, view-independent colour layers
+addressed by surface points, e.g. `{faceId,x,y}`. Its GPU storage could be
+separate chart textures, tiles packed into an atlas, texture-array layers or
+an emitter-oriented layout; these are backend choices, not the mathematical
+surface. Distinguish intrinsic coordinate charts from raster-storage tiles:
+one triangle need not mean one texture allocation. Resolution, density, layers,
+colour space, alpha compositing, filtering and boundary policies must be explicit.
+
+Drawing into an existing engine buffer and transferring it into surface storage
+is a useful initial compatibility path. It does not provide automatic intrinsic
+semantics for all operations. Alternatively, suitable commands can be replayed
+into chart targets, or geometry can be mapped before rasterization. Placement
+and seam routing must precede destructive clipping by the original local target:
+pixels already clipped away cannot be recovered by gluing afterward.
+Shaders using pixel coordinates, neighbouring texels or screen-space derivatives
+need a defined interpretation. Seam-aware filtering requires neighbour-chart
+lookup, correctly oriented gutters or equivalent sampling; identifying geometric
+edge points alone does not make image filters continuous across the seam.
+
+A proposed `getPixel(surfacePoint,{layer,...})` samples the composed surface
+framebuffer, not the camera image and not an arbitrary source artwork buffer.
+Surface points are continuous; sampling requires a specified resolution and
+nearest/interpolated convention. Seam-equivalent points should give consistent
+results for a continuous layer, subject to the declared discretization/filter
+policy. Reading GPU data may require asynchronous readback; distinguish this
+from a CPU-mirrored implementation and avoid promising cheap per-pixel queries.
+Screen picking first produces a surface point; the colour query is independent
+of whether that point is visible in the preview.
+
+**Physics remains geometric:** particles carry chart coordinates and tangent
+state, cross seams through transition maps and use an explicitly chosen force
+metric. They do not move inside raster buffers. Rendering may display their
+embedded positions as 3D markers, rasterize their footprints into surface layers,
+or do both. A 3D preview marker does not alter surface pixels unless an explicit
+surface-layer render pass writes it. Hardware outputs sample surface layers or
+evaluate vector/agent state directly; they must not depend on the preview camera.
+
+Before community publication, document this separation, the experimental scope
+and unsupported shader/pixel operations prominently. A full persistent surface
+framebuffer, seam-aware sampling and pixel readback are future work, not features
+of the current local image-patch examples.
+
 ## 3. Phases
+
+The phase numbering below records the original extraction plan, not the
+current demo order. The schedule now prioritizes a shared surface-view API,
+a p5 addon pilot/incremental migration, M8 and a bounded physics-adapter demo
+before publication. Dense meshes are already supported; the surface canvas
+also targets explicit chart assemblies and physical outputs.
 
 ### Phase 0 — Spec freeze (small, first)
 
@@ -150,33 +369,27 @@ chartPoint)` — what "reading a textured surface" means intrinsically.
 
 ## 3.1 Geometry module API — inspired by geometry-central
 
-The current atlas code (`experiments/geodesic-surfaces/src/atlas.js`) is a
-validated lab: `AtlasSurface` with `stepHead`, builders for torus / tube /
-Möbius / icosahedron. To become a library it needs a deliberate public API.
-Below, the geometry-central-inspired surface, marked by feasibility on a
-chart atlas (≠ halfedge mesh).
+The historical atlas lab supplies `AtlasSurface` / `stepHead`; the extracted
+library now lives in [manifold-core](../manifold-core/). The API inspiration
+is [geometry-central](REFERENCES.md#geometry-central), not a dependency.
+The following distinguishes current primitives from proposed work.
 
 Already have (to formalize, not rewrite):
 
-- `stepHead` — straightest geodesic tracing (geometry-central's
-  `traceGeodesic`).
+- `trace` / lab `stepHead` — straightest geodesic tracing; see
+  [Polthier–Schmies](REFERENCES.md#straightest-geodesics). Cone transport and
+  boundary semantics still need the audit in
+  [GEODESIC_MOTION.md §16](GEODESIC_MOTION.md#16-current-code-what-is-implemented-and-what-is-not).
 - Seam-aware `neighbors`, cell BFS distance, `to3D`/`embed`.
 
 Add — cheap, high value:
 
-- **`trace(start, dir)` as a first-class API** returning the full polyline,
-  endpoint, and incoming direction transported into the endpoint's frame
-  (today `stepHead` mutates a head and returns events; the pure function
-  is the reusable primitive).
+- **`trace(start, dir, length)`** already returns a polyline, endpoint,
+  outgoing direction, transport and events; harden its singular cases rather
+  than replacing it with an endpoint solver.
 - **`transport(frame, path)`** — parallel transport along a traced path:
-  just compose the `M` matrices along the crossing sequence.
-- **`distance(a, b)` / `shortestPath(a, b)`** — candidate-unfolding search:
-  unfold the faces along candidate face-paths into the plane, measure
-  straight-line distance, take the minimum (exact for few-face paths,
-  bounded search for general ones). The cell-graph BFS remains the cheap
-  quantized metric.
-- **`logMap(a, b)`** — direction + distance from `a` to `b` in `a`'s chart
-  frame (read off the winning unfolding).
+  compose the `M` matrices along ordinary crossings. Cone continuation and
+  boundary reflections need an explicit, consistent frame contract.
 - **`vertexCones()`** — angle deficit per vertex; cone points as first-class
   data (accent events, agent decision points), plus holonomy computation
   around loops (compose `M`s around a vertex → the deficit rotation, made
@@ -186,27 +399,42 @@ Add — cheap, high value:
 
 Add — medium effort, worth it:
 
-- **Vector-field integration** — Polthier–Schmies discrete Runge–Kutta for
+- **Vector-field integration** — [Polthier–Schmies](REFERENCES.md#straightest-geodesics) discrete Runge–Kutta for
   flow-following agents (currents, winds, crowds).
 - **Frame fields** — smoothest n-direction field on the atlas, with
   singularities at cone points (Poincaré–Hopf made visible). On a polygon
   soup this is combinatorial matching, not geometry-central's connection
   Laplacian — cheaper and sufficient at our scale.
-- **Heat-method distance field** — smooth per-chart distance via the
-  cell graph (diffusion on the grid); useful for "distance to a drawn
-  stroke" features and gradient flows.
+- **Approximate distance fields** — the
+  [heat method](REFERENCES.md#heat-method) uses gradient/divergence and two
+  sparse solves; cell-graph diffusion alone is not that algorithm or an exact
+  mesh-distance solver. Useful for distance-to-stroke features and flows.
 
-Explicitly out of scope (need a halfedge mesh; if ever wanted, that's the
-optional geometry-central backend in a C++ build):
+Deferred capability — not a current implementation milestone (2026-10-21):
 
-- MMP exact geodesics on arbitrary dense meshes, BFF conformal
-  parameterization, vector heat method, intrinsic triangulations.
+- **`shortestPath(a,b)`** — a reserved API that currently throws
+  `ERR_NOT_IMPLEMENTED`. A future solver, potentially
+  [MMP](REFERENCES.md#mmp), would support arbitrary face
+  endpoints, vertex events, traceback and explicit incomplete/failure states.
+  It should supply metric queries, forces, neighbour ranking and displayed
+  connections consistently. Existing `distance` remains an approximate query;
+  no backend selection or JS solver rewrite is committed.
+- **Branch-aware `logMap(a,b)`** — distance and initial tangent from the same
+  shortest-path result; expose ambiguity at cut loci. Use both endpoint
+  tangents for forces rather than a separately chosen unfolding.
+- Candidate strip unfolding is a useful analytic test/optimization only
+  after validating ordered crossings. Bounded candidate search, shooting,
+  edge Dijkstra and [FlipOut](REFERENCES.md#flipout) are not general proofs of
+  globally shortest distance. The cell graph retains its separate graph metric.
 
-The honest framing for the docs: geometry-central is the general,
-robust reference; ours is the display-oriented subset, cheaper and
-portable, deliberately so. The module docs should state the capability
-ladder per surface class (flat quotient / regular polyhedron / polygon
-soup) so users know what costs what.
+Still deferred: BFF conformal parameterization, vector heat and general
+intrinsic-triangulation infrastructure. These algorithms need additional
+structures/numerics, not necessarily geometry-central. Its optional C++
+adapter remains a future choice. See the
+[standalone MMP](REFERENCES.md#kirsanov-geodesic) and
+[CGAL](REFERENCES.md#cgal-shortest-path) references for existing endpoint solvers.
+Document capability and cost per surface class; do not imply that the general
+shortest-path problem is already solved or cheap because the tracer is.
 
 ## 4. Repo layout
 
@@ -223,8 +451,9 @@ Native-Manifold-Displays/
   docs/
 ```
 
-Sequencing: Phases 1, 1.5, 2 and 4 are the spine (the instrument example
-needs exactly those). Phase 3 can lag without blocking.
+Current sequencing is in [IMPLEMENTATION_SCHEDULE.md](IMPLEMENTATION_SCHEDULE.md).
+A bounded Phase 3 adapter/demo is now a pre-publication requirement; the
+general adapter and embedded port remain later work.
 
 ---
 
@@ -245,16 +474,20 @@ This gives a three-tier feasibility analysis.
 
 - **The development (unfolding) proxy.** For any local interaction, unfold
   the involved charts into one plane via the transition maps (a polyhedron
-  develops isometrically onto the plane away from cone points), let the
+  develops locally onto the plane away from cone points), let the
   engine work there, fold back. The engine never knows. This is the
   differential-geometer's development map; cost is maintaining the unfolding
   and sub-stepping agents that cross a seam mid-step (the head stepper
   already does exactly this).
+  This requires a valid common developed neighborhood; an arbitrary region
+  around curvature or a loop need not have one consistent planar image.
 - **Long-range geodesic forces via force callbacks.** Every serious engine
   lets you apply custom per-body forces each step. Compute intrinsic
-  distances with the library's `distance(a, b)` (cell-graph BFS / unfolding /
-  heat method, depending on surface class) and inject attraction/repulsion as
-  ordinary forces expressed in each agent's current chart frame. Thomson-
+  distance and endpoint tangents from the same shortest-path result and
+  inject attraction/repulsion in each agent's chart frame. Graph or heat
+  distances must be explicitly different/approximate models, not hidden
+  substitutes for this metric. See [GEODESIC_MOTION.md §17](GEODESIC_MOTION.md#17-proposed-solution-without-geometry-central).
+  Thomson-
   problem-on-a-cube, surface gases, etc. — all outside the engine.
 - **Seam transport as a coordinate change.** At a crossing, position and
   velocity are re-expressed by `p' = M·p + t`, `v' = M·v`. Since `M` is
@@ -284,11 +517,12 @@ or Box2D behind the interface.
   joint solvers are hardcoded Euclidean with no distance hook; "override just
   the distance function" is generally _not_ possible without forking. Route
   these through the proxy layer instead.
-- **Cone points** — unfolding around a cube vertex has a 90° wedge mismatch.
-  Options: exclude vertex-threading interactions (measure-zero, fine in
-  practice), or use the **method of images** in the unfolded universal cover
-  (standard for conical singularities): sum contributions from the agent's
-  mirrored copies.
+- **Cone points and cut loci** — no single planar proxy covers all routes.
+  Shortest paths may pass through saddles or have competing branches; these
+  cannot be dismissed as numerical noise. Summing forces from unfolded
+  images would define a different interaction law, not repair a
+  shortest-distance pair potential. Choose and document branch/singularity
+  policies as described in [GEODESIC_MOTION.md §17](GEODESIC_MOTION.md#17-proposed-solution-without-geometry-central).
 
 ### 5.4 The GR ladder ("modify the metric, not the engine")
 

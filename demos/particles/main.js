@@ -1,14 +1,17 @@
 // Demo D1 — particles on a surface. three.js host for manifold-core + manifold-physics.
 import * as THREE from 'three';
-import { BallControls } from '../shared/ballControls.js';
+import { createViewer } from '../shared/viewer.js';
 import { FatSegments } from '../shared/fatLines.js';
+import { adoptAppearanceControl } from '../shared/appearance.js';
+import { renderSurfaceScene } from '../shared/surfaceRenderer.js';
+import { SurfaceView } from '../shared/surfaceView.js';
+import { surfacePanel } from '../shared/surfacePanel.js';
 import {
   Surface,
   meshStats,
-  gaussianCurvature,
-  meanCurvature,
   VertexField,
   geodesicBetween,
+  surfaceConnection,
 } from '../../manifold-core/index.js';
 import { ParticleSystem, pairForce, uniformField } from '../../manifold-physics/index.js';
 import {
@@ -26,11 +29,6 @@ const ui = Object.fromEntries(
   [
     'mesh',
     'subdiv',
-    'colorBy',
-    'wire',
-    'surfOpacity',
-    'wireOpacity',
-    'cones',
     'count',
     'speed',
     'readBy',
@@ -41,7 +39,6 @@ const ui = Object.fromEntries(
     'linkGeo',
     'linkK',
     'linkMax',
-    'linkOpacity',
     'reseed',
     'run',
     'stepOnce',
@@ -62,9 +59,6 @@ const ui = Object.fromEntries(
     'pSize',
     'pColorMode',
     'pColor',
-    'surfColor',
-    'wireW',
-    'wireC',
     'trailW',
     'trailC',
     'trailByParticle',
@@ -87,11 +81,8 @@ bindRange(ui.count);
 bindRange(ui.speed, (v) => v.toFixed(2));
 bindRange(ui.trailLen);
 bindRange(ui.trailOpacity, (v) => v.toFixed(2));
-bindRange(ui.surfOpacity, (v) => v.toFixed(2));
-bindRange(ui.wireOpacity, (v) => v.toFixed(2));
 bindRange(ui.linkK);
 bindRange(ui.linkMax, (v) => v.toFixed(2));
-bindRange(ui.linkOpacity, (v) => v.toFixed(2));
 bindRange(ui.repel, (v) => v.toFixed(2));
 bindRange(ui.radius, (v) => v.toFixed(1));
 bindRange(ui.drag, (v) => v.toFixed(2));
@@ -110,42 +101,13 @@ fillMeshSelect(ui.mesh);
 
 // ---------------------------------------------------------------- three.js scene
 const app = $('app');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-app.appendChild(renderer.domElement);
-const scene = new THREE.Scene();
-scene.background = new THREE.Color('#0a0d12');
-const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
-camera.position.set(2.6, -3.6, 2.4);
-camera.up.set(0, 0, 1);
-camera.lookAt(0, 0, 0);
-const controls = new BallControls(camera, renderer.domElement);
-scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const key = new THREE.DirectionalLight(0xffffff, 1.1);
-key.position.set(3, -4, 5);
-camera.add(key); // lights ride with the camera: the lit side stays the side you look at while you turn it
-const fill = new THREE.DirectionalLight(0x8fb4ff, 0.5);
-fill.position.set(-4, 3, -2);
-camera.add(fill);
-scene.add(camera);
-
-function resize() {
-  const w = app.clientWidth;
-  const h = app.clientHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener('resize', resize);
-resize();
+const { renderer, scene, camera, controls } = createViewer(app);
 if (window.innerWidth < 900) ui.collapse.click();
 
 // ---------------------------------------------------------------- state
 let surface = null;
-let surfaceMesh = null;
-let wireLines = null;
-let coneGroup = null;
+const surfaceView = new SurfaceView(scene, renderer, { faces: { source: 'K' } });
+surfacePanel(ui.mesh.closest('fieldset'), surfaceView);
 let testField = null;
 let sys = null;
 let pair = null;
@@ -163,6 +125,28 @@ const fixedColor = new THREE.Color();
 const trailLines = new FatSegments(scene, renderer, { max: MAX_TRAIL_SEGMENTS, vertexColors: true });
 const chordLines = new FatSegments(scene, renderer, { max: MAX_N * 12 });
 const geoLines = new FatSegments(scene, renderer, { max: 40000 });
+const styles = {};
+const particlePanel = ui.count.closest('fieldset');
+const oldAppearance = ui.pStyle.closest('fieldset');
+for (const input of [ui.pStyle, ui.pSize, ui.pColorMode]) {
+  particlePanel.insertBefore(input.closest('.row'), ui.trails.closest('.row'));
+}
+for (const [name, label, colorInput, opacityInput, widthInput, anchor] of [
+  ['particle', 'Particles', ui.pColor, null, null, ui.trails],
+  ['trail', 'Trails', ui.trailC, ui.trailOpacity, ui.trailW, ui.trailLen],
+  ['chord', '3D chords', ui.chordC, null, ui.chordW, ui.linkGeo],
+  ['geo', 'Surface connections', ui.geoC, null, ui.geoW, ui.linkK],
+]) {
+  styles[name] = adoptAppearanceControl(colorInput, {
+    id: name, label, opacity: 1, opacityInput, widthInput,
+    parent: anchor.closest('fieldset'), before: anchor.closest('.row'),
+    onInput: () => {
+      if (surfaceView.solid) applyStyles();
+    },
+  });
+}
+particlePanel.insertBefore(ui.trailByParticle.closest('.row'), ui.trailLen.closest('.row'));
+oldAppearance.remove();
 
 // spheres
 const sphereMesh = new THREE.InstancedMesh(
@@ -210,20 +194,6 @@ const diskMesh = new THREE.Mesh(
 diskMesh.frustumCulled = false;
 scene.add(diskMesh);
 
-// diverging colormap centred at zero, robustly scaled
-function colormapDiverging(values) {
-  const finite = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
-  const q = (t) => finite[Math.min(finite.length - 1, Math.floor(t * finite.length))] ?? 0;
-  const scale = Math.max(Math.abs(q(0.02)), Math.abs(q(0.98)), 1e-9);
-  return values.map((v) => {
-    const t = Number.isFinite(v) ? Math.max(-1, Math.min(1, v / scale)) : 0;
-    const c = new THREE.Color();
-    if (t < 0) c.setRGB(0.55 + 0.45 * (1 + t), 0.62 + 0.38 * (1 + t), 1.0);
-    else c.setRGB(1.0, 0.9 - 0.65 * t, 0.85 - 0.75 * t);
-    return c;
-  });
-}
-
 function sequentialColor(t, out) {
   // dark blue -> cyan -> yellow -> white-ish
   const x = Math.max(0, Math.min(1, t));
@@ -231,6 +201,7 @@ function sequentialColor(t, out) {
 }
 
 function buildSurface() {
+  connectionCache = '';
   const key = ui.mesh.value;
   ui.subdiv.disabled = key === 'custom' || !!MESHES[key].fixedResolution;
   const d = parseInt(ui.subdiv.value, 10);
@@ -239,126 +210,28 @@ function buildSurface() {
   else mesh = MESHES[key].build(d);
   surface = Surface.fromMesh(mesh, { name: key });
   surface.maxDisks = 4096;
-  testField = VertexField.from(surface, (p) => Math.sin(4 * p[0]) * Math.cos(3 * p[2]) + 0.5 * Math.sin(5 * p[1]));
-
-  if (surfaceMesh) {
-    scene.remove(surfaceMesh, coneGroup);
-    wireLines.dispose(scene);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(mesh.positions.flat(), 3));
-  geo.setIndex(mesh.triangles.flat());
-  geo.computeVertexNormals();
-  surfaceMesh = new THREE.Mesh(
-    geo,
-    new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.75,
-      metalness: 0.05,
-      side: THREE.DoubleSide,
-      transparent: true,
-    }),
-  );
-  scene.add(surfaceMesh);
-  // unique mesh edges as wide lines
-  const seen = new Set();
-  const edges = [];
-  for (const t of mesh.triangles)
-    for (let k = 0; k < 3; k++) {
-      const a = t[k];
-      const b = t[(k + 1) % 3];
-      const id = a < b ? `${a},${b}` : `${b},${a}`;
-      if (!seen.has(id)) {
-        seen.add(id);
-        edges.push([a, b]);
-      }
-    }
-  wireLines = new FatSegments(scene, renderer, { max: edges.length });
-  wireLines.begin();
-  for (const [a, b] of edges) wireLines.seg(mesh.positions[a], mesh.positions[b]);
-  wireLines.end();
-  coneGroup = buildCones();
-  coneGroup.visible = ui.cones.checked;
-  scene.add(coneGroup);
+  surfaceView.setSurface(surface);
+  testField = new VertexField(surface, surfaceView.scalarValues('field'));
   applyStyles();
-  colourSurface();
   controls.frame(mesh.positions);
   rebuildParticles();
 }
 
 function applyStyles() {
-  const so = parseFloat(ui.surfOpacity.value);
-  surfaceMesh.material.opacity = so;
-  surfaceMesh.material.depthWrite = so > 0.6;
-  surfaceMesh.visible = so > 0.005;
-  wireLines.visible = ui.wire.checked;
-  wireLines.opacity = parseFloat(ui.wireOpacity.value);
-  wireLines.width = parseFloat(ui.wireW.value);
-  wireLines.color = ui.wireC.value;
   trailLines.opacity = parseFloat(ui.trailOpacity.value);
   trailLines.width = parseFloat(ui.trailW.value);
-  chordLines.opacity = geoLines.opacity = parseFloat(ui.linkOpacity.value);
+  chordLines.opacity = styles.chord.opacity;
+  geoLines.opacity = styles.geo.opacity;
   chordLines.width = parseFloat(ui.chordW.value);
   chordLines.color = ui.chordC.value;
   geoLines.width = parseFloat(ui.geoW.value);
   geoLines.color = ui.geoC.value;
   fixedColor.set(ui.pColor.value);
-}
-
-function colourSurface() {
-  const n = surface.vertices.length;
-  let values;
-  switch (ui.colorBy.value) {
-    case 'K':
-      values = new VertexField(surface, Array.from(gaussianCurvature(surface))).smoothed(2, 0.6).values;
-      break;
-    case 'H':
-      values = new VertexField(surface, Array.from(meanCurvature(surface))).smoothed(2, 0.6).values;
-      break;
-    case 'deficit':
-      values = surface.vertices.map((v) => (v.corners.length ? (v.boundary ? Math.PI : 2 * Math.PI) - v.angleSum : 0));
-      break;
-    case 'field':
-      values = testField.values;
-      break;
-    default:
-      values = new Array(n).fill(0);
+  for (const m of [sphereMesh.material, diskMesh.material]) {
+    m.opacity = styles.particle.opacity;
+    m.transparent = m.opacity < 1;
+    m.depthWrite = m.opacity === 1;
   }
-  const plain = new THREE.Color(ui.surfColor.value);
-  const colors =
-    ui.colorBy.value === 'none'
-      ? surface.vertices.map(() => plain)
-      : colormapDiverging(values.map((v) => (Number.isNaN(v) ? 0 : v)));
-  const arr = new Float32Array(n * 3);
-  colors.forEach((c, i) => {
-    arr[3 * i] = c.r;
-    arr[3 * i + 1] = c.g;
-    arr[3 * i + 2] = c.b;
-  });
-  surfaceMesh.geometry.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-}
-
-function buildCones() {
-  const g = new THREE.Group();
-  const cones = surface.vertexCones().filter((c) => Math.abs(c.deficit) > 1e-6);
-  const maxD = Math.max(1e-9, ...cones.map((c) => Math.abs(c.deficit)));
-  const sphere = new THREE.SphereGeometry(1, 10, 8);
-  for (const c of cones) {
-    const m = new THREE.Mesh(
-      sphere,
-      new THREE.MeshBasicMaterial({
-        color: c.deficit > 0 ? 0xff6b5d : 0x5da8ff,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      }),
-    );
-    const r = 0.008 + 0.03 * Math.sqrt(Math.abs(c.deficit) / maxD);
-    m.scale.setScalar(r);
-    m.position.set(...c.position);
-    g.add(m);
-  }
-  return g;
 }
 
 function rebuildParticles() {
@@ -447,12 +320,23 @@ function lifted(p, d) {
 }
 
 // ---------------------------------------------------------------- connections (k nearest by surface distance)
+let connectionStats = { shooting: 0, fallback: 0, unreachable: 0 };
+let connectionCache = '';
 function renderConnections() {
   const wantChords = ui.linkChords.checked;
   const wantGeo = ui.linkGeo.checked;
   chordLines.visible = wantChords;
   geoLines.visible = wantGeo;
   if (!wantChords && !wantGeo) return;
+  const key = `${wantChords}:${wantGeo}:${ui.linkK.value}:${ui.linkMax.value}:` +
+    sys.particles.map((p) => `${p.id},${p.faceId},${p.x},${p.y}`).join(';');
+  if (connectionCache === key) {
+    chordLines.fitResolution();
+    geoLines.fitResolution();
+    return;
+  }
+  connectionCache = key;
+  connectionStats = { shooting: 0, fallback: 0, unreachable: 0 };
   const pairs = sys.neighbourGraph(parseInt(ui.linkK.value, 10), parseFloat(ui.linkMax.value));
   if (wantChords) {
     chordLines.begin();
@@ -461,12 +345,14 @@ function renderConnections() {
   }
   if (wantGeo) {
     geoLines.begin();
-    for (const { a, b } of pairs) {
-      // shooting-corrected geodesic that actually ends at b (the disk's single unfolding only gives a guess)
-      const r = geodesicBetween(surface, a, b, { iterations: 3, tol: 1e-5 });
-      if (!r) continue;
+    for (const pair of pairs) {
+      const [a, b] = pair.a.id < pair.b.id ? [pair.a, pair.b] : [pair.b, pair.a];
+      const r = surfaceConnection(surface, a, b, { iterations: 3, tol: 1e-5 });
+      if (!r) { connectionStats.unreachable++; continue; }
+      if (r.method === 'shooting') connectionStats.shooting++;
+      else connectionStats.fallback++;
       const pl = r.polyline;
-      for (let i = 0; i + 1 < pl.length; i++) geoLines.seg(lifted(pl[i], 0.004), lifted(pl[i + 1], 0.004));
+      for (let i = 0; i + 1 < pl.length; i++) geoLines.seg(surface.to3D(pl[i]), surface.to3D(pl[i + 1]));
     }
     geoLines.end();
   }
@@ -563,9 +449,9 @@ function loop(now) {
   }
   renderParticles();
   renderConnections();
-  wireLines.fitResolution();
+  surfaceView.fitResolution();
   controls.update();
-  renderer.render(scene, camera);
+  renderSurfaceScene(renderer, scene, camera, [surfaceView.solid]);
   if (frame++ % 10 === 0) updateReadout();
 }
 
@@ -587,22 +473,15 @@ function updateReadout() {
     `N=${sys.particles.length}  t=${sys.time.toFixed(1)}s  E_kin=${sys.kineticEnergy().toExponential(2)}\n` +
     `mean NN dist (3D)=${P.length > 1 ? (nnSum / P.length).toFixed(3) : '–'}  cone hits=${vertexHits}\n` +
     `reading ${ui.readBy.options[ui.readBy.selectedIndex].text}: [${readLo.toFixed(3)}, ${readHi.toFixed(3)}]\n` +
+    (ui.linkGeo.checked ? `connections: ${connectionStats.shooting} shooting, ${connectionStats.fallback} edge-route fallback, ${connectionStats.unreachable} unreachable\n` : '') +
     `${fps.toFixed(0)} fps  disks cached=${surface._disks?.size ?? 0}`;
 }
 
 // ---------------------------------------------------------------- wiring
 ui.mesh.onchange = buildSurface;
 ui.subdiv.onchange = buildSurface;
-ui.colorBy.onchange = colourSurface;
-ui.surfColor.addEventListener('input', colourSurface);
 for (const el of [
-  ui.wire,
-  ui.surfOpacity,
-  ui.wireOpacity,
   ui.trailOpacity,
-  ui.linkOpacity,
-  ui.wireW,
-  ui.wireC,
   ui.trailW,
   ui.chordW,
   ui.chordC,
@@ -611,8 +490,6 @@ for (const el of [
   ui.pColor,
 ])
   el.addEventListener('input', applyStyles);
-ui.wire.onchange = applyStyles;
-ui.cones.onchange = () => (coneGroup.visible = ui.cones.checked);
 ui.count.onchange = rebuildParticles;
 ui.speed.onchange = rebuildParticles;
 ui.trails.onchange = () => {
@@ -668,12 +545,15 @@ wireMeshImport({
 buildSurface();
 requestAnimationFrame(loop);
 window.__nmd = {
+  surfaceView,
   get surface() {
     return surface;
   },
   get sys() {
     return sys;
   },
+  get connectionStats() { return connectionStats; },
+  get connectionLines() { return geoLines; },
   THREE,
   scene,
   camera,

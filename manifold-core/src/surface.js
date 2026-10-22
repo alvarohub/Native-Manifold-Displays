@@ -31,6 +31,7 @@ import {
   develop,
   logMap,
   distance,
+  shortestPath,
   transportAlong,
 } from './geodesic.js';
 import { curvatureAt, normalAt, gaussianCurvatureAt, curvatureTensor } from './curvature.js';
@@ -241,6 +242,11 @@ export class Surface {
 
   distance(a, b, opts) {
     return distance(this, a, b, opts);
+  }
+
+  // Reserved exact endpoint query: currently throws ERR_NOT_IMPLEMENTED, with no approximate fallback.
+  shortestPath(a, b, opts) {
+    return shortestPath(this, a, b, opts);
   }
 
   transportAlong(crossings, vec) {

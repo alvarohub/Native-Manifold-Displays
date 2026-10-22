@@ -1,5 +1,5 @@
 import { assert, near, nearVec } from './assert.mjs';
-import { Surface, cubeMesh, icosphereMesh, planeMesh, cylinderMesh, torusMesh } from '../manifold-core/index.js';
+import { Surface, cubeMesh, icosphereMesh, planeMesh, cylinderMesh, torusMesh, shortestPath } from '../manifold-core/index.js';
 import { sub3, len3, dot3, add3, scl3, norm3 } from '../manifold-core/src/vec.js';
 
 // chart point on a face containing 3D point P (P must lie on the surface)
@@ -18,6 +18,23 @@ function chartDir(s, faceId, d3) {
 }
 
 export const tests = {
+  'shortestPath: deferred exact queries fail explicitly through both public entry points'() {
+    const surface = Surface.fromMesh(planeMesh(2, 2, 1, 1));
+    const a = surface.centroid(0);
+    const b = surface.centroid(1);
+    for (const target of [a, b]) {
+      for (const query of [() => shortestPath(surface, a, target), () => surface.shortestPath(a, target)]) {
+        let error;
+        try { query(); } catch (caught) { error = caught; }
+        assert(error instanceof Error && error.code === 'ERR_NOT_IMPLEMENTED', 'explicit unimplemented error');
+        assert(error.message.includes('exact global surface paths are deferred'), 'explains deferred capability');
+      }
+    }
+    const approximate = surface.distance(a, b);
+    assert(Number.isFinite(approximate), 'existing approximate query remains available');
+    near(surface.trace(a, [1, 0], 0.01).length, 0.01, 1e-12, 'existing motion is unaffected');
+  },
+
   'holonomy around a vertex equals its angle deficit (cube 90°, icosahedron 60°, plane 0)'() {
     const cube = Surface.fromMesh(cubeMesh(2, 1));
     for (const f of cube.faces) {

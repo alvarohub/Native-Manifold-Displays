@@ -8,6 +8,49 @@ import { importMesh, writeBinarySTL, Surface, cellAdjacency, planeMesh } from '.
 const bunnyOBJ = readFileSync(new URL('../demos/assets/bunny.obj', import.meta.url), 'utf8');
 
 export const tests = {
+  'demo meshes: all five Platonic solids retain regular faces and closed topology'() {
+    for (const [key, vertices, faces, sides] of [
+      ['tetra', 4, 4, 3], ['cube', 8, 6, 4], ['octa', 6, 8, 3],
+      ['dodeca', 20, 12, 5], ['icosa', 12, 20, 3],
+    ]) {
+      const mesh = MESHES[key].build(0);
+      assert(mesh.positions.length === vertices, `${key}: vertices`);
+      assert(mesh.triangles.length === faces * (sides - 2), `${key}: triangulated faces`);
+      const { report } = importMesh(`${key}.stl`, writeBinarySTL(mesh));
+      assert(report.closed && report.orientable && report.euler === 2, `${key}: closed sphere topology`);
+      assert(!report.degenerate && !report.duplicates && !report.nonManifoldEdges, `${key}: valid triangles`);
+      const surface = Surface.fromMesh(mesh);
+      near(surface.totalDeficit(), 4 * Math.PI, 1e-9, `${key}: Gauss-Bonnet`);
+      const groups = [];
+      for (const f of surface.faces) {
+        let group = groups.find((g) => Math.abs(g.n.reduce((s, x, i) => s + x * f.n[i], 0)) > 1 - 1e-10 &&
+          Math.abs(g.n.reduce((s, x, i) => s + x * (f.C[i] - g.C[i]), 0)) < 1e-10);
+        if (!group) { group = { n: f.n, C: f.C, vertices: new Set() }; groups.push(group); }
+        for (const i of mesh.triangles[f.id]) group.vertices.add(i);
+      }
+      assert(groups.length === faces, `${key}: coplanar polygon faces`);
+      let edgeLength = null;
+      for (const group of groups) {
+        const points = [...group.vertices].map((i) => mesh.positions[i]);
+        assert(points.length === sides, `${key}: corners per face`);
+        const distances = points.flatMap((a, i) => points.slice(i + 1).map((b) => Math.hypot(...a.map((x, j) => x - b[j]))));
+        const shortest = Math.min(...distances);
+        edgeLength ??= shortest;
+        near(shortest, edgeLength, 1e-10, `${key}: equal edge lengths across faces`);
+        assert(distances.filter((d) => Math.abs(d - shortest) < 1e-10).length === (sides === 3 ? 3 : sides),
+          `${key}: regular polygon edges`);
+        const radii = points.map((p) => Math.hypot(...p.map((x, i) =>
+          x - points.reduce((s, q) => s + q[i], 0) / sides)));
+        for (const r of radii) near(r, radii[0], 1e-10, `${key}: cyclic regular face`);
+      }
+      if (key !== 'cube') {
+        const layout = buildLifeSurface(key, 80, 14);
+        assert(layout.dims === null && layout.cellOf.length === mesh.triangles.length, `${key}: triangle Life`);
+        assert(MESHES[key].fixedResolution, `${key}: detail control disabled`);
+      }
+    }
+  },
+
   'demo meshes: bundled bunny imports as a modest, closed manifold through OBJ and STL'() {
     const { mesh, report } = importMesh('bunny.obj', bunnyOBJ);
     assert(report.vertices === 1839 && report.triangles === 3674, 'expected low-resolution bunny');

@@ -502,6 +502,38 @@ export function tetrahedronMesh(size = 1) {
   return { positions, triangles };
 }
 
+export function octahedronMesh(radius = 1) {
+  const positions = [
+    [radius, 0, 0], [-radius, 0, 0], [0, radius, 0],
+    [0, -radius, 0], [0, 0, radius], [0, 0, -radius],
+  ];
+  const triangles = [
+    [0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4],
+    [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5],
+  ];
+  return { positions, triangles };
+}
+
+export function dodecahedronMesh(radius = 1) {
+  // The dual of a regular icosahedron: face centres become vertices, vertex fans become pentagons.
+  const ico = icosphereMesh(0);
+  const positions = ico.triangles.map((tri) =>
+    scl3(norm3(tri.map((i) => ico.positions[i]).reduce(add3, [0, 0, 0])), radius),
+  );
+  const triangles = [];
+  ico.positions.forEach((normal, vertex) => {
+    const face = ico.triangles.flatMap((tri, i) => tri.includes(vertex) ? [i] : []);
+    const u = norm3(sub3(positions[face[0]], scl3(normal, dot3(positions[face[0]], normal))));
+    const v = cross3(normal, u);
+    face.sort((a, b) =>
+      Math.atan2(dot3(positions[a], v), dot3(positions[a], u)) -
+      Math.atan2(dot3(positions[b], v), dot3(positions[b], u)),
+    );
+    for (let i = 1; i < face.length - 1; i++) triangles.push([face[0], face[i], face[i + 1]]);
+  });
+  return { positions, triangles };
+}
+
 // Möbius band: strip of width w around a circle of radius R with `halfTwists` half-turns (1 = Möbius,
 // non-orientable with one boundary; 0 = cylinder; 2 = orientable twisted annulus). Open surface.
 // Not developable: K ≈ −1/(4R²) on the centreline (a flat paper band is a different embedding, Sadowsky 1930).

@@ -20,6 +20,7 @@ export {
   frameFromPoint,
   imprint,
   imprintTurtle,
+  traceTurtle,
   imprintExp,
   imprintFermi,
   imprintProjection,

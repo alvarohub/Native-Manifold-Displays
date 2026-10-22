@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #0a0d12; color: #d8dde6; font: 15px system-ui, sans-serif; }
+main { width: min(100% - 32px, 850px); margin: 20px auto; }
+h1 { font-size: 22px; }
+p { line-height: 1.5; }
+a { color: #7be0ff; }
+code { color: #ffd27b; overflow-wrap: anywhere; }
+canvas { display: block; max-width: 100%; height: auto !important; touch-action: none; }
+[role=alert] { color: #ff9c8e; }
+iframe { display: block; width: 100%; height: 690px; border: 1px solid #34465c; border-radius: 10px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,400px),1fr)); gap: 14px; }
+button { padding: 7px 12px; background: #26364c; color: inherit; border: 1px solid #8196b1; border-radius: 5px; }

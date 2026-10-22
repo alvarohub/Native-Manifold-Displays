@@ -6,6 +6,33 @@
 // Sign convention: convex surfaces with outward normals have positive curvature (sphere: κ = +1/r).
 import { add3, sub3, scl3, dot3, cross3, len3, norm3 } from './vec.js';
 
+// Unique embedded mesh edges. angle is unsigned bending in radians (zero = coplanar).
+// Orient the two incident normals consistently across this edge only: no global orientation is
+// required, including on a Möbius band. Boundary/nonmanifold edges have no two-face angle.
+export function surfaceEdges(surface) {
+  if (!surface.mesh || !surface.vertices) throw new Error('surfaceEdges requires an embedded mesh surface');
+  const edges = new Map();
+  for (const face of surface.faces) {
+    for (let e = 0; e < face.vidx.length; e++) {
+      const from = face.vidx[e], to = face.vidx[(e + 1) % face.vidx.length];
+      const a = Math.min(from, to), b = Math.max(from, to), key = `${a}:${b}`;
+      if (!edges.has(key)) edges.set(key, { a, b, sides: [] });
+      edges.get(key).sides.push({ faceId: face.id, edge: e, from, to });
+    }
+  }
+  return [...edges.values()].map(({ a, b, sides }) => {
+    let angle = null;
+    if (sides.length === 2) {
+      const [A, B] = sides;
+      const orientation = A.from === B.from ? -1 : 1;
+      const nA = surface.faceById(A.faceId).n, nB = surface.faceById(B.faceId).n;
+      // atan2 remains accurate near coplanarity, unlike acos of a dot product near one.
+      angle = Math.atan2(len3(cross3(nA, nB)), orientation * dot3(nA, nB));
+    }
+    return { a, b, sides, angle, boundary: sides.length === 1, nonManifold: sides.length > 2 };
+  });
+}
+
 // ---------------------------------------------------------------- per-vertex scalars
 
 export function vertexAreas(surface) {

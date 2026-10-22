@@ -194,30 +194,6 @@
             >3</output
           >
         </div>
-        <div class="row">
-          <label for="colorBy">colour</label
-          ><select id="colorBy">
-            <option value="none">plain</option>
-            <option value="K" selected>Gaussian curvature K</option>
-            <option value="H">mean curvature H</option>
-            <option value="deficit">angle deficit (exact)</option>
-            <option value="field">test field (stripes)</option>
-          </select>
-        </div>
-        <div class="row">
-          <label for="surfOpacity">surface opacity</label
-          ><input id="surfOpacity" type="range" min="0" max="1" step="0.01" value="1" /><output id="surfOpacityOut"
-            >1.00</output
-          >
-        </div>
-        <div class="row check"><label for="wire">wireframe</label><input id="wire" type="checkbox" /></div>
-        <div class="row">
-          <label for="wireOpacity">edge opacity</label
-          ><input id="wireOpacity" type="range" min="0" max="1" step="0.01" value="0.45" /><output id="wireOpacityOut"
-            >0.45</output
-          >
-        </div>
-        <div class="row check"><label for="cones">show cone points</label><input id="cones" type="checkbox" /></div>
         <div class="buttons"><button id="loadMesh">Load mesh… (.obj / .stl)</button></div>
         <div class="hint">
           Your own object: pick a file or drop it on the page. It is welded, cleaned (degenerate/duplicate triangles),
@@ -321,7 +297,7 @@
           <label for="linkChords">straight lines in 3D (chords)</label><input id="linkChords" type="checkbox" />
         </div>
         <div class="row check">
-          <label for="linkGeo">geodesic segments on the surface</label><input id="linkGeo" type="checkbox" />
+          <label for="linkGeo">surface paths (geodesic / edge fallback)</label><input id="linkGeo" type="checkbox" />
         </div>
         <div class="row">
           <label for="linkK">neighbours k</label
@@ -333,15 +309,11 @@
             >1.60</output
           >
         </div>
-        <div class="row">
-          <label for="linkOpacity">line opacity</label
-          ><input id="linkOpacity" type="range" min="0" max="1" step="0.01" value="0.8" /><output id="linkOpacityOut"
-            >0.80</output
-          >
-        </div>
         <div class="hint">
           Each particle links to its k nearest neighbours by <em>surface</em> distance. With 12 repellers on a sphere
-          and k = 5 the chords draw an icosahedron.
+          and k = 5 the chords draw an icosahedron. Distances/forces use approximate local unfoldings, not an exact
+          shortest-path solver. Failed connection shooting uses a mesh-edge route that reaches both particles;
+          counts are shown below. Each swatch button opens independent colour, opacity and line-width controls.
         </div>
       </fieldset>
 
@@ -364,20 +336,12 @@
           <label for="pColorMode">particle colour</label
           ><select id="pColorMode" style="grid-column: 2 / 3">
             <option value="read">by reading</option>
-            <option value="fixed" selected>fixed →</option></select
-          ><input id="pColor" type="color" value="#e6ebf2" />
+            <option value="fixed" selected>fixed</option></select>
         </div>
         <div class="row">
-          <label for="surfColor">surface (plain)</label><span></span><input id="surfColor" type="color" value="#9aa6ba" />
+          <label for="pColor">particle colour</label><span></span><input id="pColor" type="color" value="#e6ebf2" />
         </div>
-        <div class="hint">Lines: width (px) and colour.</div>
-        <div class="row">
-          <label for="wireW">wireframe</label><input id="wireW" type="range" min="0.5" max="6" step="0.25" value="1" /><input
-            id="wireC"
-            type="color"
-            value="#6f84aa"
-          />
-        </div>
+        <div class="hint">RGBA controls: colour + opacity, and line width in pixels. Rear geometry is attenuated by surface opacity.</div>
         <div class="row">
           <label for="trailW">trails</label><input id="trailW" type="range" min="0.5" max="8" step="0.25" value="1.5" /><input
             id="trailC"
@@ -412,8 +376,8 @@
 
       <div class="hint">
         Drag = turn the object like a ball; drag on the faint circle = spin about the view axis; wheel = zoom;
-        right-drag = pan. Particles move on straightest geodesics; forces are measured along the surface
-        (geodesic disks), not through space. Part of
+        right-drag = pan. Particles move on straightest geodesics; forces use approximate unfolded
+        surface distances, not exact global shortest paths or 3D chords. Part of
         <a href="https://github.com/alvarohub/Native-Manifold-Displays">Native Manifold Displays</a>.
       </div>
     </section>

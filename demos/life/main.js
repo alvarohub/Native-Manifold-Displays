@@ -1,9 +1,15 @@
 // Game of Life on preset quad grids or triangle cells of any imported surface.
 import { createViewer } from '../shared/viewer.js';
+import { FatSegments } from '../shared/fatLines.js';
+import { appearanceControl } from '../shared/appearance.js';
+import { renderSurfaceScene } from '../shared/surfaceRenderer.js';
+import { SurfaceView } from '../shared/surfaceView.js';
+import { surfacePanel } from '../shared/surfacePanel.js';
 import {
   cellAdjacency,
   meshStats,
   orientTriangles,
+  Surface,
 } from '../../manifold-core/index.js';
 import { fillMeshSelect, importMeshFile, describeImport, wireMeshImport, setCustomOption } from '../shared/meshes.js';
 import { parseRule, lifeStep, PATTERNS } from './life.js';
@@ -53,8 +59,35 @@ const DEAD = new THREE.Color('#1b2130');
 const GLOW = new THREE.Color('#7a3d8f');
 
 let mesh, adjacency, alive, next, heat, rule, nu, nv, cellMesh, borders, generation, stats, orientable, cellOf, dims;
+let cellColors;
+const surfaceView = new SurfaceView(scene, renderer, { faces: { source: 'custom' } }, { customLabel: 'Life cell states' });
+surfacePanel(ui.surf.closest('fieldset'), surfaceView);
 let running = true;
 let acc = 0;
+const styles = {};
+const cellStyleAnchor = ui.grid.closest('.row').nextElementSibling;
+for (const [id, label, color, opacity, width] of [
+  ['alive', 'Live cells', '#ffb45d', 1, null],
+  ['dead', 'Dead cells', '#1b2130', 1, null],
+  ['heat', 'Trail glow', '#7a3d8f', 1, null],
+  ['borders', 'Cell borders', '#3a4660', 0.6, 1],
+]) {
+  const parent = ui.grid.closest('fieldset');
+  styles[id] = appearanceControl(parent, {
+    id, label, color, opacity, width,
+    before: cellStyleAnchor,
+    onInput: () => { applyLook(); paint(); },
+  });
+}
+
+function applyLook() {
+  ALIVE.set(styles.alive.color);
+  DEAD.set(styles.dead.color);
+  GLOW.set(styles.heat.color);
+  borders.color = styles.borders.color;
+  borders.opacity = styles.borders.opacity;
+  borders.width = styles.borders.width;
+}
 
 function build() {
   nu = parseInt(ui.nu.value, 10);
@@ -78,38 +111,18 @@ function build() {
     ? 'Preset quad cells: neighbours come from mesh connectivity, not a Fermi frame. Cube uses only "cells around".'
     : 'One triangle = one cell; fixed preset resolution or uploaded mesh resolution. No global rows/columns or classic grid seeds. B3/S23 runs on this graph, but Conway gliders are not guaranteed.';
 
-  if (cellMesh) {
-    scene.remove(cellMesh, borders);
-    cellMesh.geometry.dispose();
-    cellMesh.material.dispose();
-    borders.geometry.dispose();
-    borders.material.dispose();
-  }
-  const pos = new Float32Array(mesh.triangles.length * 9);
-  mesh.triangles.forEach((tri, t) => tri.forEach((v, k) => pos.set(mesh.positions[v], 9 * t + 3 * k)));
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pos.length), 3));
-  geo.computeVertexNormals();
-  cellMesh = new THREE.Mesh(
-    geo,
-    new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.7,
-      side: THREE.DoubleSide, // one-sided surfaces: a cell is a region of the surface, seen from both sides
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-    }),
-  );
+  borders?.dispose(scene);
+  surfaceView.setSurface(Surface.fromMesh(mesh));
+  cellMesh = surfaceView.solid;
+  cellColors = new THREE.BufferAttribute(new Float32Array(mesh.triangles.length * 12), 4);
   const seg = [];
   for (const [a, b] of cellBorderEdges(mesh, cellOf)) seg.push(...mesh.positions[a], ...mesh.positions[b]);
-  borders = new THREE.LineSegments(
-    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(seg, 3)),
-    new THREE.LineBasicMaterial({ color: 0x3a4660, transparent: true, opacity: 0.6 }),
-  );
+  borders = new FatSegments(scene, renderer, { max: seg.length / 6 });
+  borders.begin();
+  for (let i = 0; i < seg.length; i += 6) borders.seg(seg.slice(i, i + 3), seg.slice(i + 3, i + 6));
+  borders.end();
   borders.visible = ui.grid.checked;
-  scene.add(cellMesh, borders);
+  applyLook();
   controls.frame(mesh.positions);
   seed();
 }
@@ -151,14 +164,16 @@ function step() {
 
 const tmp = new THREE.Color();
 function paint() {
-  const col = cellMesh.geometry.getAttribute('color');
+  const col = cellColors;
   for (let t = 0; t < cellOf.length; t++) {
     const c = cellOf[t];
+    const fade = Math.min(1, heat[c] * 0.9);
+    const alpha = alive[c] ? styles.alive.opacity : styles.dead.opacity * (1 - fade) + styles.heat.opacity * fade;
     if (alive[c]) tmp.copy(ALIVE);
     else tmp.copy(DEAD).lerp(GLOW, Math.min(1, heat[c] * 0.9));
-    for (let k = 0; k < 3; k++) col.setXYZ(3 * t + k, tmp.r, tmp.g, tmp.b);
+    for (let k = 0; k < 3; k++) col.setXYZW(3 * t + k, tmp.r, tmp.g, tmp.b, alpha);
   }
-  col.needsUpdate = true;
+  surfaceView.setFaceColors(col.array);
 }
 
 function readout() {
@@ -242,13 +257,16 @@ function loop(now) {
     if (n) paint();
   }
   controls.update();
-  renderer.render(scene, camera);
+  borders.fitResolution();
+  surfaceView.fitResolution();
+  renderSurfaceScene(renderer, scene, camera, [cellMesh]);
   if (frame++ % 10 === 0) readout();
 }
 
 build();
 requestAnimationFrame(loop);
 window.__nmd = {
+  surfaceView,
   get alive() {
     return alive;
   },

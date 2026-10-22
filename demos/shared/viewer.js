@@ -36,7 +36,7 @@ export function createViewer(container, { background = '#0a0d12', cameraPos = [2
 }
 
 // Mesh + wireframe for a library Surface built from a mesh ({positions, triangles}).
-export function surfaceMeshes(surface, { color = 0x9aa6ba, vertexColors = null } = {}) {
+export function surfaceMeshes(surface, { color = 0x9aa6ba, vertexColors = null, wireframe = true } = {}) {
   const mesh = surface.mesh;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(mesh.positions.flat(), 3));
@@ -54,10 +54,10 @@ export function surfaceMeshes(surface, { color = 0x9aa6ba, vertexColors = null }
       transparent: true,
     }),
   );
-  const wire = new THREE.LineSegments(
+  const wire = wireframe ? new THREE.LineSegments(
     new THREE.WireframeGeometry(geo),
     new THREE.LineBasicMaterial({ color: 0x6f84aa, transparent: true, opacity: 0.35 }),
-  );
+  ) : null;
   return { solid, wire, geometry: geo };
 }
 

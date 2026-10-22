@@ -8,6 +8,8 @@ import {
   dot2,
   cross2,
   len2,
+  sub3,
+  len3,
   norm2,
   perp2,
   apply2,
@@ -240,7 +242,8 @@ export function transportAlong(surface, crossings, vec) {
 
 // Unfold the faces within geodesic radius R of the centroid of `faceId` into that face's chart plane.
 // maps: faceId -> rigid {M, t} taking that face's chart coordinates into the disk plane. Faces are
-// visited in order of unfolded distance (Dijkstra); each face keeps its first (shortest) unfolding.
+// visited by an unfolded-distance priority heuristic; each face keeps only its first unfolding.
+// This is not an exact shortest-path map: curvature/cut loci can require multiple copies of a face.
 export class GeodesicDisk {
   constructor(surface, faceId, R) {
     this.surface = surface;
@@ -330,10 +333,12 @@ export function develop(surface, faceId, R) {
 // R defaults to growing powers of two of the face size until b is reached (bounded by maxR).
 export function logMap(surface, a, b, { R = null, maxR = Infinity } = {}) {
   const faceA = surface.faceById(a.faceId);
+  // Any reachable face has a dual-graph route shorter than this bound.
+  const reach = (surface.maxUnfoldRadius ??= surface.faces.reduce((sum, f) => sum + f.size, 0));
   let radius = R ?? faceA.size * 2;
   let disk = develop(surface, a.faceId, radius);
   while (!disk.has(b.faceId)) {
-    if (R !== null || radius * 2 > maxR) return null;
+    if (R !== null || radius * 2 > maxR || radius > reach) return null;
     radius *= 2;
     disk = develop(surface, a.faceId, radius);
   }
@@ -350,11 +355,28 @@ export function distance(surface, a, b, opts) {
   return l ? l.distance : Infinity;
 }
 
+/**
+ * Reserved API for a globally shortest surface path between arbitrary chart points a and b.
+ * TODO: select and validate a shortest-path backend before defining the result/options contract.
+ * See docs/GEODESIC_MOTION.md, Part III. Exact global queries are deferred; straightest trace()
+ * remains a separate initial-value operation. MMP is a candidate, not a committed JS rewrite.
+ * Never substitute distance()/logMap(), shooting, an edge route, or an ambient 3D chord here:
+ * none certifies the globally shortest surface path. Throw even for trivial inputs so callers
+ * cannot mistake this placeholder for an available solver or interpret failure as disconnection.
+ * @throws {Error} Always, with code ERR_NOT_IMPLEMENTED.
+ */
+export function shortestPath(surface, a, b, opts) {
+  const error = new Error('shortestPath is not implemented: exact global surface paths are deferred; see docs/GEODESIC_MOTION.md, Part III.');
+  error.code = 'ERR_NOT_IMPLEMENTED';
+  throw error;
+}
+
 // Geodesic from a to b by shooting: start from the logMap guess, measure the miss at the endpoint with a
 // local logMap, transport it back into a's frame through the trace's Mᵀ, correct direction and length,
-// repeat. The disk's single unfolding per face makes the first guess miss by O(K·area); this converges
-// to the straightest geodesic actually ending at b (within tol) in a few steps away from cone points.
-// Returns the trace result plus { miss, iterations } or null if b is unreachable in the search radius.
+// repeat. The disk's single unfolding per face can give a poor initial guess on strongly curved meshes.
+// Correction can fail or reach a non-shortest branch; successful endpoint convergence is not global optimality.
+// A local shooting solver, NOT a guaranteed shortest-path solver. Always inspect `converged`.
+// `miss` is measured on the returned trace, not on the previous iteration.
 export function geodesicBetween(surface, a, b, { iterations = 4, tol = 1e-6, R = null, maxR = Infinity } = {}) {
   const l0 = logMap(surface, a, b, { R, maxR });
   if (!l0) return null;
@@ -364,11 +386,14 @@ export function geodesicBetween(surface, a, b, { iterations = 4, tol = 1e-6, R =
   let miss = Infinity;
   let it = 0;
   const localR = (surface.maxFaceSize ??= Math.max(...surface.faces.map((f) => f.size))) * 3;
-  for (; it < iterations; it++) {
+  for (; it <= iterations; it++) {
     const le = logMap(surface, r.end, b, { R: localR });
-    if (!le) break;
-    miss = le.distance;
-    if (miss < tol) break;
+    miss = le ? le.distance : Infinity;
+    const endpointError = len3(sub3(surface.to3D(r.end), surface.to3D(b)));
+    if (miss <= tol && endpointError <= tol && !r.events.some((e) => e.type === 'stalled')) {
+      return { ...r, miss, endpointError, converged: true, iterations: it };
+    }
+    if (!le || it === iterations) break;
     const c = apply2(transpose2(r.M), le.vector); // endpoint-frame error -> a's frame
     const nv = [dir[0] * len + c[0], dir[1] * len + c[1]];
     len = len2(nv);
@@ -376,7 +401,13 @@ export function geodesicBetween(surface, a, b, { iterations = 4, tol = 1e-6, R =
     dir = [nv[0] / len, nv[1] / len];
     r = trace(surface, a, dir, len);
   }
-  return { ...r, miss, iterations: it };
+  return {
+    ...r,
+    miss,
+    endpointError: len3(sub3(surface.to3D(r.end), surface.to3D(b))),
+    converged: false,
+    iterations: it,
+  };
 }
 
 export { perp2 };

@@ -11,6 +11,16 @@ instrument**. Sound stays available as one optional output adapter (a
 "reader" may sonify what it reads, cf. scoreLight in `IDEAS.md`), but the
 accent is on the surface toolkit itself and on two visual demos.
 
+**Scope clarification (2026-10-21):** the product is a **2D graphics interface
+on a non-flat canvas**, aimed at creative coders and evolving/distributed
+physical displays, not a replacement for geometry-central or a new stock
+graphics/physics engine. The support (mesh or explicitly glued charts) is
+separate from its viewport and output devices. Motivation, scattered-panel
+topology, dynamic geometry, p5.js, SVG and Arduino/GFX strategy are recorded in
+[LIBRARY_PLAN.md §2.1–2.3](LIBRARY_PLAN.md#21-motivation-the-canvas-is-the-support-not-a-rectangular-viewport).
+Exact global shortest paths are deferred; do not block this adapter work
+on implementing a general solver. Local approximations must remain explicit.
+
 ---
 
 ## 1. Objectives, restated
@@ -38,15 +48,14 @@ What it must do:
 - **Local geometry**: angles between tangent directions at a point (trivial —
   charts are Euclidean), `transport(dir, path)` (compose the $M$'s),
   holonomy around a vertex (= deficit, made visible).
-- **Distances**: `develop(point, R)` — unfold the faces reachable within
-  geodesic radius $R$ into one plane (a _geodesic disk_: BFS over faces with
-  per-face `{M, t}` into the disk plane, pruned by distance). From it:
-  `logMap(a, b)` (direction + distance from $a$ to $b$ in $a$'s frame) and
-  `distance(a, b)`, exact on developable patches and a good approximation
-  across cone points for $b$ inside the disk. This is the primitive both
-  demos need (pair forces, decal placement). Global shortest paths across a
-  dense mesh are **out of scope** (geometry-central's job); the cell-graph BFS
-  remains the cheap quantized metric for displays.
+- **Distances**: `develop(faceId, R)` currently retains one unfolded copy
+  per face; `logMap(a,b)` / `distance(a,b)` use that heuristic. This is not
+  a certified metric across curvature, competing routes or cut loci.
+  Exact global endpoint paths are **deferred**, not a geometry-central
+  implementation requirement. `shortestPath` is a throwing placeholder
+  (`ERR_NOT_IMPLEMENTED`), never an alias for shooting or graph routes.
+  Validate and state the local regime used by demos; graph BFS remains a
+  separate quantized metric. Preserve the initial-value tracer for inertia.
 - **Curvature**: Gaussian curvature = angle deficit per vertex (exact,
   intrinsic); mean curvature from dihedral angles per edge (extrinsic);
   per-vertex **curvature tensor** (Rusinkiewicz 2004 face-tensor averaging) so
@@ -67,8 +76,10 @@ What it must do:
   a cutoff radius (repulsion → packing/Voronoi; attraction/springs → chains),
   user callbacks that may read any surface field (colour, curvature).
 - Integrator: semi-implicit Euler with substeps; energy/speed diagnostics.
-- Deferred: the stock-engine adapter of `LIBRARY_PLAN.md` §5 (needed only for
-  rigid bodies and contact, not for point particles).
+- Planned before publication: a bounded stock 2D-engine adapter and demo
+  ([LIBRARY_PLAN.md §5](LIBRARY_PLAN.md#5-physics-pluggable-flat-engines-on-a-curved-surface)).
+  Reuse engine machinery rather than growing a general physics engine here;
+  surface versus ambient-distance interactions are explicit model choices.
 
 ### C. `manifold-ink` — imprinting 2D curves onto the surface
 
@@ -109,6 +120,10 @@ D4 paint/trails as a per-chart buffer, D5 geodesic Voronoi zones.
 Both demos live in this repo under `demos/` as plain ES-module web pages
 consuming the libraries by relative import (three.js via CDN importmap, like
 the lab). "Send a link" = GitHub Pages of this repo.
+This describes the current hosts, not a renderer requirement. Target p5.js
+sketches through an addon/WEBGL adapter, first as a small pilot, then by
+incremental demo migration with parity tests. No full rewrite is scheduled
+before that pilot; the core remains independent of p5 and three.js.
 
 ---
 
@@ -243,8 +258,82 @@ dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureA
       near the anchor and diverge toward the ends of the word; cube — text
       folds across the edge with gap 0.0000; 400 points imprint in 3 ms
       (25 ms for all four modes).
-- [ ] **M8 — Relaxed text (S).** D2 "relax" button: letters become spring
-      chains (rest lengths = planar lengths) with soft anchors; uses M4.
+- [x] **Before M8 — Shared surface visualization API/panel.**
+      One programmatic, GUI-independent surface view for all demos; one panel
+      named "Manifold surface". Faces / edges / vertices each have a leading
+      visibility checkbox and trailing swatch-only style button. Shared scalar
+      field sources, colour scales/ranges and legends; preserve demo state
+      colours (e.g. Life) as an explicit alternative, not an overwritten buffer.
+      Edges: all versus feature edges, angular threshold and optional continuous
+      bending-angle fade; always handle open boundaries separately. Vertices:
+      fixed colour, angle deficit or area-normalized Gaussian curvature, with
+      distinct boundary treatment. Use locally consistent orientations on
+      nonorientable inputs. Geometry calculations stay in the library, rendering
+      in an adapter, DOM controls in shared GUI helpers; no copying among demos.
+      Keep the interface suitable for a later p5 renderer. Verify polyhedron
+      coplanar-diagonal suppression, boundary retention, nonorientable seams,
+      independent visibility/styles and Life's own colouring before proceeding.
+      Implemented across particles, imprint and Life with a pure core edge query,
+      renderer-independent settings, a DOM-free three.js adapter and one shared
+      GUI. Verified polygon-crease counts (cube/dodecahedron), Möbius boundaries,
+      API/GUI synchronization, GPU per-edge opacity and retained Life colours.
+      See [usage and conventions](../README.md#shared-manifold-surface-view).
+- [x] **p5.js addon pilot (staged creative-coding priority).**
+      Use documented addon hooks and an explicit supported p5 version; keep
+      `createCanvas(width,height,WEBGL)` for the viewport and
+      `createManifoldCanvas(surface,{frame})` for the logical support. First
+      validate a seam-crossing path, explicit placement/imprint semantics,
+      multiple canvas instances and renderer-independent core state.
+      Implemented on pinned p5 2.3.4 in `demos/p5-pilot`: independent cube
+      stroke/rectangle sketches, shared existing turtle computation, per-face
+      segment retention, explicit boundary/vertex/stall rejection, global and
+      instance modes, per-sketch cleanup. Node and real p5 GPU regressions
+      cover seam fidelity, lengths, isolation, opaque occlusion and style/GL
+      restoration. [Pilot API](../README.md#p5js-addon-pilot).
+- [x] **Simple p5 hello-world and graphics/SVG adapter sketches.**
+      Preserve the original pilot; add classic global-mode setup/draw examples
+      with perspective cameras. Native p5.Graphics supplies moving coloured
+      shapes on a cube and text on a torus. Pure bounded patch geometry clips
+      image UVs to actual source triangles; isometric local unfolding rejects
+      cone-containing/cut patches, tangent-plane projection permits distortion
+      on curved supports and rejects missing/overlapping sheets.
+      Placements use straightest tracing and ordinary-edge parallel transport.
+      Generated SVG path data and p5 font outlines reuse existing curve parsing,
+      with projected vector segments clipped at seams. Full p5 demo migration,
+      arbitrary SVG documents and transparent supports remain separate.
+      [Usage and limitations](../README.md#classic-p5-sketches-graphics-buffers-and-moving-placements).
+- [ ] **p5.js demo migration (incremental, parity-gated).**
+      Migrate demos incrementally, preserving picking, wide lines, transparency,
+      controls, imports and exports. Full raster/SVG compatibility is not the
+      pilot scope; reuse existing drawing tools rather than reimplement them.
+      Do not make AR/VR or device output depend on a p5 framebuffer.
+- [ ] **M8 — Spring-chain lettering (next content demo; scope updated 2026-10-21).**
+      Extend D2 with input-text and live-clock sources (the blobchain reference),
+      a relax/run toggle and reset to the initial imprint. Each glyph contour
+      becomes its own chain: preserve closed loops and holes, never connect
+      unrelated contours. Rest lengths come from planar contour samples;
+      soft anchors retain the letter shape while surface springs relax.
+      Geometry/dynamics belong in the libraries; font, clock and UI glue in D2.
+      Clock digit changes must rebuild/retarget affected glyphs without
+      accidentally linking old and new contours. Define clock update and
+      anchor behavior before implementation.
+      **Prerequisite:** validate the local distance/direction regime used by
+      springs and repair the relevant cone transport contract. Exact global
+      shortest paths are deferred, not an M8 prerequisite; state explicitly
+      which local approximation the demo uses and report out-of-regime cases.
+      The current single-copy unfolding and edge fallback are not exact
+      geodesic solutions and must not be presented as such.
+      See [GEODESIC_MOTION.md, Part III](GEODESIC_MOTION.md#part-iii--straightest-motion-versus-shortest-connections).
+      Verify rest-length force balance on a plane, seam-crossing chains,
+      stable relaxation on curved meshes, independent glyph contours, and
+      text/clock updates. Implementation deferred until after the menu/style work.
+- [ ] **Before M9 — Stock 2D-engine adapter + bounded demo.**
+      Start with one engine (e.g. Box2D; choose the actual JS/WASM binding
+      before implementation), valid locally developed neighborhoods, and
+      cross-seam motion/contact tests. State limits for finite rigid bodies,
+      cone vertices and joints. Offer explicitly named surface/ambient
+      interaction models; do not imply replacing a distance callback adapts
+      an entire engine. This milestone does not require exact global distances.
 - [ ] **M9 — Publish: project page (M).** GitHub Pages site for the repo:
       a presentation page (not a paper, but with real references) —
       background → the atlas idea → what is new → the demos embedded/linked
@@ -254,9 +343,12 @@ dir)` → {II, κ₁, κ₂, H, K, κₙ, τ_g}, `normalAt`, `gaussianCurvatureA
       and D2 exist; until then `REFERENCES.md` and `IDEAS.md` accumulate the
       material. `.nojekyll`, README demo links.
 
-Deferred, unchanged from the plan: conformance JSON vectors (write them when
-the API stops moving, before any C++ port), texture bridge both ways, stock
-physics-engine adapter, firmware table generator, C++/oF port.
+Deferred: exact global shortest-path backend, full SVG/Geomerative-like
+document adapters, dynamic-support updates/remeshing, AR/VR and device-output
+adapters, texture bridge both ways, firmware table generator and the bounded
+Arduino/C++/GFX subset (plus any oF host). Write conformance vectors before a
+native port. The bounded stock-engine adapter is now a pre-publication task,
+not part of this deferred list.
 
 ---
 
@@ -266,15 +358,18 @@ physics-engine adapter, firmware table generator, C++/oF port.
   The fast-path tiers (flat quotients, regular polyhedra) stay as special
   cases the same API accepts.
 - **Point-particle physics is hand-rolled** in `manifold-physics` (an
-  integrator plus force callbacks). The pluggable stock-engine adapter is
-  deferred to rigid bodies.
+  integrator plus force callbacks). Update 2026-10-21: a bounded pluggable
+  stock-engine adapter/demo is required before publication.
 - **Demos live in-repo** (`demos/`) for speed; the "separate host repo" idea
   returns only if a demo grows into its own project.
 - **Phase 2 "shareable web instrument" → "shareable demos"** (D1, D2). The
   textured-object instrument becomes D3, optional.
-- **geometry-central** remains reference only; the geodesic-disk `develop`
-  deliberately covers the _local_ regime both demos need and nothing more.
-- Three.js appears only inside `demos/`; the three libraries stay pure.
+- **geometry-central** remains reference only; do not grow a duplicate general
+  geometry toolkit. Current `develop` is a local heuristic, not a globally
+  valid unfolding or certified shortest-path solver.
+- Three.js currently appears only inside `demos/`; the libraries stay pure.
+  p5.js is a planned frontend/renderer adapter, not a replacement dependency
+  in the geometry, drawing-state or physics core.
 
 ---
 

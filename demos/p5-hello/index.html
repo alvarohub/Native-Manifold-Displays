@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hello manifold — p5.js</title>
+    <link rel="stylesheet" href="../shared/p5Sketch.css">
+  </head>
+  <body>
+    <main>
+      <h1>Hello, non-flat canvas!</h1>
+      <p>p5 draws three transparent pictures. The manifold adapter moves and folds them across cube seams.
+        Drag to orbit; this is a perspective view.
+        <a href="./sketch.js">Read the complete setup/draw sketch</a>.</p>
+      <div id="preview"></div>
+      <p role="alert"></p>
+      <p>Red triangle, yellow circle, blue rectangle: native <code>p5.Graphics</code> drawing, not
+        reimplemented shape primitives. Each has an independent surface placement.
+        The local patches unfold without stretching, provided they avoid cube corners.
+        <a href="../p5-gallery/">More examples: torus text, cube circle and SVG outlines</a>.
+        <a href="../p5-pilot/">Original pilot</a>.</p>
+    </main>
+    <script src="./sketch.js"></script>
+    <script src="../shared/p5Start.js"></script>
+  </body>
+</html>

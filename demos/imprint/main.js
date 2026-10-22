@@ -16,7 +16,12 @@ import {
   imprint,
   liftContour,
 } from '../../manifold-ink/index.js';
-import { createViewer, surfaceMeshes, pointerRay, SegmentBuffer, download } from '../shared/viewer.js';
+import { createViewer, pointerRay, download } from '../shared/viewer.js';
+import { FatSegments } from '../shared/fatLines.js';
+import { appearanceControl } from '../shared/appearance.js';
+import { renderSurfaceScene } from '../shared/surfaceRenderer.js';
+import { SurfaceView } from '../shared/surfaceView.js';
+import { surfacePanel } from '../shared/surfacePanel.js';
 import {
   MESHES,
   fillMeshSelect,
@@ -31,8 +36,6 @@ const ui = Object.fromEntries(
   [
     'mesh',
     'subdiv',
-    'surfOpacity',
-    'wire',
     'source',
     'text',
     'font',
@@ -68,7 +71,6 @@ const bindRange = (input, fmt = (v) => v) => {
   sync();
 };
 bindRange(ui.subdiv);
-bindRange(ui.surfOpacity, (v) => v.toFixed(2));
 bindRange(ui.density);
 bindRange(ui.size, (v) => v.toFixed(2));
 bindRange(ui.angle, (v) => `${v}°`);
@@ -104,9 +106,9 @@ fillMeshSelect(ui.mesh);
 const V = createViewer($('app'));
 const { THREE, scene, camera, renderer, controls } = V;
 const COLORS = { turtle: 0xffd27b, exp: 0x7be0ff, fermi: 0x9dff7b, projection: 0xff8fd4 };
-const buffers = Object.fromEntries(Object.entries(COLORS).map(([k, c]) => [k, new SegmentBuffer(scene, c)]));
-const gapBuffer = new SegmentBuffer(scene, 0xff4d4d, 2000);
-const frameBuffer = new SegmentBuffer(scene, 0xffffff, 64);
+const buffers = Object.fromEntries(Object.entries(COLORS).map(([k, c]) => [k, new FatSegments(scene, renderer, { color: c, max: 60000 })]));
+const gapBuffer = new FatSegments(scene, renderer, { color: 0xff4d4d, max: 2000 });
+const frameBuffer = new FatSegments(scene, renderer, { color: 0xffffff, max: 64 });
 const anchorDot = new THREE.Mesh(
   new THREE.SphereGeometry(0.02, 12, 8),
   new THREE.MeshBasicMaterial({ color: 0xffffff }),
@@ -114,14 +116,24 @@ const anchorDot = new THREE.Mesh(
 scene.add(anchorDot);
 
 let surface = null;
-let solid = null;
-let wire = null;
+const surfaceView = new SurfaceView(scene, renderer, { faces: { opacity: 0.9 } });
+surfacePanel(ui.mesh.closest('fieldset'), surfaceView);
 let frame = null;
 let contours = []; // planar, normalised to unit width, centred
 let font = null;
 let lastResult = null;
 let animating = false;
 let dirty = true;
+const styles = {};
+const imprintPanel = ui.mode.closest('fieldset');
+for (const [name, color] of Object.entries({ ...COLORS, gap: 0xff4d4d, frame: 0xffffff })) {
+  const before = name === 'gap' ? ui.showFrame.closest('.row')
+    : name === 'frame' ? ui.lineOpacity.closest('.row') : ui.size.closest('.row');
+  styles[name] = appearanceControl(imprintPanel, {
+    id: name, label: name, color: `#${color.toString(16).padStart(6, '0')}`, width: 1.5,
+    before, onInput: () => applyLook(),
+  });
+}
 
 // ---------------------------------------------------------------- surface
 function buildSurface() {
@@ -130,12 +142,7 @@ function buildSurface() {
   const d = parseInt(ui.subdiv.value, 10);
   const mesh = key === 'custom' && customMesh ? customMesh : MESHES[key].build(d);
   surface = Surface.fromMesh(mesh, { name: key });
-  if (solid) {
-    scene.remove(solid);
-    scene.remove(wire);
-  }
-  ({ solid, wire } = surfaceMeshes(surface));
-  scene.add(solid, wire);
+  surfaceView.setSurface(surface);
   controls.frame(surface.mesh.positions);
   applyLook();
   // default anchor: the point facing the camera, heading = screen-right so text reads left to right
@@ -149,11 +156,11 @@ function buildSurface() {
 }
 
 function applyLook() {
-  const o = parseFloat(ui.surfOpacity.value);
-  solid.material.opacity = o;
-  solid.material.depthWrite = o > 0.6;
-  wire.visible = ui.wire.checked;
-  for (const b of Object.values(buffers)) b.opacity = parseFloat(ui.lineOpacity.value);
+  for (const [name, lines] of Object.entries({ ...buffers, gap: gapBuffer, frame: frameBuffer })) {
+    lines.color = styles[name].color;
+    lines.width = styles[name].width;
+    lines.opacity = styles[name].opacity * Number(ui.lineOpacity.value);
+  }
 }
 
 // ---------------------------------------------------------------- drawing source
@@ -226,7 +233,7 @@ function toCommands(c) {
 }
 
 // ---------------------------------------------------------------- imprint + render
-function lift(p, amount = 0.004) {
+function lift(p, amount = 0) {
   const q = surface.to3D(p);
   const n = surface.normal(p.faceId);
   return [q[0] + n[0] * amount, q[1] + n[1] * amount, q[2] + n[2] * amount];
@@ -339,8 +346,6 @@ ui.size.addEventListener('input', () => {
 ui.mode.onchange = () => (dirty = true);
 ui.showGap.onchange = ui.showFrame.onchange = () => (dirty = true);
 ui.lineOpacity.addEventListener('input', applyLook);
-ui.surfOpacity.addEventListener('input', applyLook);
-ui.wire.onchange = applyLook;
 ui.mesh.onchange = ui.subdiv.onchange = buildSurface;
 ui.source.onchange = ui.density.onchange = buildContours;
 ui.lsys.onchange = () => {
@@ -434,7 +439,9 @@ function loop(now) {
   if (animating) nudge(0.25 * dt, 0);
   if (dirty) redraw();
   controls.update();
-  renderer.render(scene, camera);
+  for (const lines of [...Object.values(buffers), gapBuffer, frameBuffer]) lines.fitResolution();
+  surfaceView.fitResolution();
+  renderSurfaceScene(renderer, scene, camera, [surfaceView.solid]);
 }
 
 buildSurface();
@@ -450,6 +457,7 @@ loadFont(ui.font.value)
   });
 requestAnimationFrame(loop);
 window.__nmd = {
+  surfaceView,
   get surface() {
     return surface;
   },

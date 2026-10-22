@@ -1,14 +1,21 @@
 # How a Head Moves on the Surface — the Atlas Method
 
-This document explains the single mechanism that drives all head motion in this
-project, from the original 2007 cube to the current arbitrary-polyhedron
-experiment. Two implementations exist; they are the same algorithm:
+This document explains intrinsic motion from the original 2007 cube to the
+current triangle-mesh library, and distinguishes it from finding a shortest
+path between two points.
 
-- [src/core/surface.js](../src/core/surface.js) + [src/core/ball.js](../src/core/ball.js) — the
-  Cube Carillon instrument (square faces, cuboid).
+- [manifold-core/src/geodesic.js](../manifold-core/src/geodesic.js) — current
+  library: tracing, cone continuation, transport, and approximate distance queries.
 - [experiments/geodesic-surfaces/src/atlas.js](../experiments/geodesic-surfaces/src/atlas.js) —
-  the generalized lab (arbitrary polygon charts: rectangles, triangles,
-  Möbius strip, square tube with twists, icosahedral sphere).
+  historical generalized lab (polygon charts and abstract gluings).
+- [Cube Carillon](https://github.com/alvarohub/CubicCarillon_topologicalSequencer) —
+  the original instrument; its `surface.js` / `ball.js` are in that repository.
+
+**Reading guide (2026-10-19):** Parts I–II explain the atlas and embedding.
+[Part III](#part-iii--straightest-motion-versus-shortest-connections) separates
+the initial-value and endpoint problems, explains the vertex cases, audits
+the current limitations, and proposes a JS shortest-path solver without
+geometry-central. That proposal is **not implemented** by this documentation update.
 
 ---
 
@@ -39,7 +46,9 @@ geometry** instead of hand-typed.
 
 The mathematical name for this object: the surface is an **atlas** (a set of
 flat polygonal charts), the gluing maps are its **transition maps**, and a
-trajectory that is straight inside each chart is a **geodesic**.
+trajectory that is straight inside each chart **and straight across unfolded
+seams** is locally geodesic away from vertices. At vertices a continuation
+definition is necessary; local straightness never guarantees global shortestness.
 
 ---
 
@@ -95,6 +104,8 @@ Two fine points:
 - **If an edge has no neighbour** (an open boundary, like the rim of the
   Möbius strip in the lab), the head is reflected off the edge instead:
   `v ← 2(v·tangent)tangent − v`.
+  This is a chosen **billiard boundary condition**, not free geodesic
+  continuation. Stopping or emitting an event are other possible policies.
 
 On the cube this loop is what you wrote in 2007: detect which side of the
 square was exceeded, switch face, remap coordinates and velocity. The
@@ -245,10 +256,11 @@ physical fold:
 - **Chart picture (what the code does)**: stay flat the whole time, and change
   coordinates so the two charts overlap on the shared edge.
 
-They are the same rigid motion. So the algorithm "ray inside a chart + map at
-the seam" _is_ geodesic integration on a polyhedron, exact up to float
-precision — no differential equations, no normal corrections, no projection
-steps.
+They are the same rigid motion. Away from vertex hits and open boundaries,
+"ray inside a chart + map at the seam" is geodesic integration on a
+polyhedron, exact up to floating-point and intersection tolerances — no
+normal corrections or projection steps. Singularities need the explicit
+rules in §14, not just another seam map.
 
 ### Curvature lives only at the vertices
 
@@ -261,11 +273,13 @@ vertex → deficit 60°; twelve vertices give 12·60° = 720° = 4π. ✓
 
 Consequences for the sequencer:
 
-- A trajectory aimed **exactly at a vertex** has no unique continuation (the
-  cone point): the unfolded angle there is less than 360°, so "straight ahead"
-  is ambiguous. In code this is a measure-zero event; in practice float noise
-  nudges the head off the vertex. This is the natural "accent event" hook
-  discussed in IDEAS.md.
+- At an interior vertex, let the total incident angle be `Theta`. It can be
+  less than, equal to, or greater than `2*pi`. A **straightest** continuation
+  is uniquely defined by splitting `Theta` equally, whereas a **locally
+  shortest** continuation may be impossible or nonunique (see §14).
+  The current library explicitly detects vertex hits and emits events;
+  floating-point noise is not a valid continuation policy. These are also
+  natural musical accent/decision events.
 - Parallel transport around a vertex rotates a vector by the deficit — this is
   why a head that loops a closed path around a corner comes back heading in a
   _different_ direction than it left (holonomy). On a flat torus (no vertices,
@@ -330,10 +344,12 @@ geodesic equation (or use constrained dynamics). The atlas method above is for
 quotients — which is where the instrument's musical structure (cell grids,
 edge events, vertex accents) is exact and cheap.
 
-_Addendum (2026-10-17)._ This paragraph is about the integrator, not about
-the geometry: a dense triangle mesh _is_ a smooth surface's approximation and
-the atlas quantities converge to the smooth ones (second order in the mesh
-size for distances on an icosphere). How each polyhedral quantity relates to
+_Addendum (2026-10-19)._ This paragraph is about the integrator, not about
+the geometry: a suitable dense triangle mesh approximates a smooth surface.
+Metric convergence requires appropriate approximation/mesh-quality assumptions;
+selected icosphere distance tests do not certify the current solver globally
+or establish convergence of every trajectory through a cone point.
+How each polyhedral quantity relates to
 its smooth counterpart — exact analogue vs. estimator, and in which sense it
 converges — is the subject of
 [DISCRETE_TO_SMOOTH.md](DISCRETE_TO_SMOOTH.md).
@@ -351,8 +367,7 @@ All references are to
 [experiments/geodesic-surfaces/src/atlas.js](../experiments/geodesic-surfaces/src/atlas.js)
 (core) and
 [experiments/geodesic-surfaces/src/main.js](../experiments/geodesic-surfaces/src/main.js)
-(renderer). The cube instrument's
-[src/core/surface.js](../src/core/surface.js) does exactly the same things with
+(renderer). The separate cube instrument's `surface.js` does the same things with
 a shorthand (its faces are axis-aligned rectangles, so the frames are written
 down directly in `FACE_SPECS`).
 
@@ -539,3 +554,276 @@ The correspondence to keep in mind:
 | Grid lines   | polyline buffers                 | `embed(x, y)` sampled         |
 
 Same surface, four views of it. The head only ever _lives_ in the first row.
+
+---
+
+# Part III — Straightest motion versus shortest connections
+
+## 14. The initial-value problem: position, direction, travel length
+
+**Input:** a surface point `p`, a tangent direction `v`, and an arc length `s`.
+**Output:** the trajectory, endpoint, outgoing direction, and crossing events.
+This is the job of `trace(p, v, s)`. For an unforced, undamped musical head,
+`s = speed * dt`: there is no target point to find.
+
+The directly relevant reference is **Polthier–Schmies, _Straightest Geodesics
+on Polyhedral Surfaces_** (1998; reprinted in the SIGGRAPH 2006 course).
+Their straightest definition supplies a unique initial-value continuation
+through interior cone vertices. See the
+[paper and author preprint](REFERENCES.md#straightest-geodesics).
+It is a principled definition, not an endpoint-search algorithm.
+
+At an interior vertex, write `Theta = sum(incident face angles)` and
+`deficit = 2*pi - Theta`. The incoming and outgoing rays divide the fan into
+angles `alpha` and `beta`, with `alpha + beta = Theta`:
+
+| Vertex | Straightest rule | Locally shortest continuation through the vertex |
+| --- | --- | --- |
+| Flat, `Theta = 2*pi` | `alpha = beta = pi` | The same unique continuation |
+| Positive curvature, `Theta < 2*pi` | `alpha = beta = Theta/2 < pi` | None, when the vertex is in the path interior |
+| Negative curvature (saddle), `Theta > 2*pi` | `alpha = beta = Theta/2 > pi` | A range: both `alpha >= pi` and `beta >= pi` |
+
+The shortestness condition has a simple explanation: if either side angle
+is less than `pi`, unfolding that side lets us cut the corner and shorten the
+path. Thus a cube-corner continuation with 135° on each side is **straightest
+but not locally shortest**. At a saddle, equal splitting selects one of the
+locally shortest continuations, not all of them. Endpoints located at a vertex
+are a separate case; the two-sided interior-path test does not apply there.
+
+So the user's natural equal-angle choice is precisely an established
+straightest rule. Other choices model different things: stop and signal the
+singularity, choose a saddle shortest branch, or smooth the cone into a cap
+and integrate on that different metric. They are not interchangeable exact
+solutions of one initial-value problem. Smooth-surface geodesics are both
+straightest and locally shortest, but even there a long geodesic need not be
+the globally shortest route between its endpoints.
+
+**Boundaries and frames need separate contracts.** Reflection at an open edge
+is billiard motion; at a boundary corner there may be several incident edges,
+so "reflect" alone does not specify a unique outcome. Transport along an
+ordinary edge-crossing path is the product of its chart matrices. Through a
+cone singularity, one must specify the discrete transport convention too;
+ordinary seam products alone do not implement the straightest heading change.
+The paper develops discrete transport as well as vector-field integration.
+
+## 15. The endpoint problem: connect two specified surface points
+
+**Input:** `a` and `b`, including arbitrary points inside faces.
+**Output:** a path connecting them, its intrinsic length, and endpoint tangent
+directions. For distance-based interactions the desired quantity is
+
+`d(a,b) = min(length(gamma))` over all surface paths from `a` to `b`.
+
+This is harder than tracing: neither the initial direction, the length, nor
+the sequence of faces is known. Different routes can pass on different sides
+of curvature, holes or handles; equally short routes can coexist at a
+**cut locus**. There is no globally single-valued smooth logarithm map.
+
+For a vertex-free candidate face sequence, unfold the strip and connect the
+endpoints by a straight segment. That candidate is valid only if the segment
+crosses the required edges in order and remains inside every triangle.
+Unfolded faces can overlap: their planar coordinates alone do not prove that
+the segment follows a legal surface route. A correct local candidate is not
+automatically the global minimum over other sequences.
+
+In particular:
+
+- **Shooting** tries to invert tracing by adjusting initial direction/length.
+  It can fail or find a longer branch. A shortest path through a saddle may
+  use an unequal-angle continuation, so straightest shooting cannot express
+  every shortest path, even with unlimited iterations.
+- **Edge Dijkstra** solves a restricted graph problem. Its route is a valid
+  upper bound, useful for initialization or pruning, not generally a
+  geodesic. Original mesh edges do not constrain the shortest surface path.
+- **A fixed corridor plus unfolding/funnel or local shortening** only solves
+  a restricted problem. Freeing a path from its initial corridor is essential;
+  shortest within one corridor does not establish globally shortest.
+- **[FlipOut](REFERENCES.md#flipout)** shortens an initial path using intrinsic
+  edge flips. The result follows edges of a *new intrinsic triangulation*,
+  whose edges cross interiors of the original triangles. This is not the
+  original-edge zigzag. It computes locally shortest geodesics; it does not
+  generally guarantee the global minimum across competing routes.
+- **[Heat / vector heat](REFERENCES.md#heat-method)** provide approximate
+  distance and transport/log-map machinery. They are valuable alternatives
+  for large systems, but not exact polyhedral endpoint-path certificates.
+
+Shortest paths and straightest traces therefore need **distinct APIs**.
+Replaying a shortest route for a musical head should follow the returned
+segments, not assume `trace(a, initialDir, distance)` reproduces it through
+every singularity.
+
+## 16. Current code: what is implemented and what is not
+
+This is an audit of the working tree on 2026-10-19, not a claim of completed
+repairs:
+
+- **Motion:** `trace` uses exact face-interior drift and edge transitions,
+  with equal-angle `coneContinuation`, boundary reflection and a step limit.
+  Existing tests cover several positive-curvature vertex hits, not the full
+  singularity/boundary contract.
+- **Transport defect:** for `Surface.fromMesh(cubeMesh(2,1))`, face 0,
+  corner 0, arriving from that face's centroid, `coneContinuation().M`
+  maps the incoming direction **45° away** from the returned outgoing
+  direction. The direction and advertised transport disagree.
+  `transportAlong` only sees ordinary crossings, not cone or reflection
+  events. This needs repair before frames are trusted through such events.
+- **Distances and forces:** `GeodesicDisk` retains one unfolding per face.
+  `logMap` / `distance`, pair-neighbour selection and spring forces use that
+  approximation, not a globally valid shortest-path map.
+- **Connections:** `geodesicBetween` is local shooting. `converged` checks
+  its endpoint, not global optimality. The current `surfaceConnection`
+  automatically substitutes an edge route when shooting fails.
+  **That fallback is a known defect in the geodesic feature, not the
+  proposed solution.** Reaching both endpoints is necessary, not sufficient.
+
+The motion integrator does not use this edge fallback; pair and spring
+forces do not use it either. Their separate approximation must also be
+replaced, rather than fixing only the displayed line.
+
+## 17. Proposed solution without geometry-central
+
+**Decision update (2026-10-21): exact global endpoint paths are deferred.**
+Keep and harden straightest tracing for inertia; preserve explicit limitations
+on current local force/distance estimates. Do not block surface-canvas, p5.js
+or bounded physics-adapter work on a general solver, and do not quietly turn
+approximate paths into exact results.
+
+The public `shortestPath(surface,a,b,opts)` and `Surface.shortestPath(a,b,opts)`
+are reserved placeholders: both always throw `ERR_NOT_IMPLEMENTED`, even
+for coincident endpoints. They are not called by existing demos/forces.
+No output/options contract or backend is implemented.
+
+The earlier proposal below is retained as **one candidate**, not a commitment
+to rebuilding geometry-central's algorithms in JS. When the capability is
+needed, compare existing implementations/adapters first.
+Also, an exact polyhedral solver does not necessarily require an iterative
+numerical optimizer: MMP is a wavefront-propagation algorithm. The challenge
+is finding the global minimum across routes, not just shortening one route.
+
+[Mitchell–Mount–Papadimitriou (MMP)](REFERENCES.md#mmp) solves the polyhedral
+shortest-path problem. Unlike graph Dijkstra, it propagates information over
+**continuous intervals on edges**, often called windows:
+
+1. A window stores an edge interval, an unfolded source or pseudo-source,
+   an accumulated distance offset, and predecessor information.
+   In edge coordinates its distance function has the form
+   `D(x) = offset + sqrt((x-u)^2 + v^2)` on that interval.
+2. Unfold the adjacent triangle and propagate visible portions onto its
+   other edges. Retain multiple competing windows, split their overlaps,
+   and discard only portions dominated by a shorter valid distance function.
+   This is the essential information missing from one-copy-per-face unfolding.
+3. Handle vertex events/pseudo-sources, including saddle and boundary cases
+   required by shortest paths. Do **not** impose equal-angle straightest
+   continuation on the shortest-path wavefront.
+4. Seed arbitrary face-interior sources without snapping to mesh vertices.
+   Query face-interior targets by the valid incoming windows, then backtrack
+   to recover exact endpoint positions and face-interior crossing segments.
+5. Stop only when the propagation frontier cannot improve the target, or
+   when the requested distance-radius search is complete. A work/memory
+   budget exhaustion is `incomplete`, not "unreachable" or an exact result.
+
+Here "exact" means the exact **piecewise-flat metric algorithm**, implemented
+with documented numerical tolerances, not exact arithmetic and not an exact
+geodesic on an underlying smooth bunny. Window intersection, dominance,
+near-degenerate cases and traceback require careful numerical testing.
+
+**Existing implementations, not mandatory dependencies:**
+[Kirsanov's MMP code](REFERENCES.md#kirsanov-geodesic) is a standalone C++
+implementation; geometry-central itself uses it for exact distances/paths.
+[CGAL Surface Mesh Shortest Path](REFERENCES.md#cgal-shortest-path) provides
+another exact family (Xin–Wang / Chen–Han). These confirm that the requested
+library function exists and give independent test references. Reusing a
+small standalone C++ solver through WASM would be an alternative if we later
+choose a compiled build; it is **not required or adopted by this proposal**.
+Any source reuse needs a pinned revision and license review. A JS
+implementation should follow the published algorithm, not a guessed subset.
+
+### One result shared by physics and drawing
+
+Proposed eventual result contract (not implemented by the throwing exports):
+
+- `shortestPath(a,b)` returns status, distance, a surface polyline, initial
+  and terminal unit tangents, method/tolerances, and any detected branch ties.
+  Distinguish `ok`, `disconnected`, `incomplete` and invalid input.
+  Do not claim uniqueness merely because one path was returned.
+- `distance` and a branch-aware `logMap` use that same solver/result.
+  `logMap = distance * initialTangent` on a selected shortest branch, but
+  it is not always the inverse of the straightest exponential map at cones.
+- Compute an interacting unordered pair once. Use the same branch and
+  distance for both forces, neighbour selection, and the displayed path at
+  the same simulation state; reverse the result for the opposite query.
+  Remove automatic graph-route substitution. An edge route may be an
+  explicitly selected diagnostic, never a success-shaped geodesic.
+
+For a pair energy `U(d)`, let `tA` point from `a` into the selected path and
+`tB` be its forward arrival tangent at `b`. At regular endpoints where the
+distance is differentiable, first variation gives
+
+`F_a = U'(d) * tA`, and `F_b = -U'(d) * tB`.
+
+For a spring, `U'(d) = k*(d-rest)`. This uses endpoint tangents rather than
+comparing chart coordinates or transporting through an unrelated unfolding.
+At a cut locus there may be no unique distance gradient; specify a
+deterministic shared-branch policy and report ties. Branch persistence or
+smoothing may help musical behavior, but can change the shortest-distance
+force law and must be an explicit model choice. Coincident particles and
+endpoints at cone vertices also need a stated force/direction policy.
+
+### Performance without substituting the wrong geometry
+
+Cache static topology/edge lengths, not distance fields for moving sources.
+One source propagation can answer multiple target queries and stop at a
+finite force radius; recompute it when the source moves. A multi-source
+nearest-source field does not supply all pairwise distances. Reuse the
+same solve for rendering rather than paying twice.
+
+On an isometrically embedded triangle mesh, the 3D chord is a lower bound
+on intrinsic distance and can safely reject pairs outside a cutoff; it must
+not supply the force distance. This bound is not automatically valid for
+an arbitrary decorative embedding of an abstract atlas. Graph paths can
+provide valid upper bounds. Benchmark bunny-sized meshes and actual particle
+counts before promising interactive exact all-pairs forces. Workers or a
+compiled backend are later performance decisions, not fallback geometry.
+
+## 18. Candidate implementation order and acceptance tests
+
+The global-solver steps below are deferred. The tracer/transport audit is
+still relevant now; these are acceptance criteria to preserve for future
+backend selection, not a requirement to implement MMP before the next demo.
+
+1. **Harden tracing and transport.** Test flat, positive- and negative-deficit
+   fans; wrapped fan angles; incoming/outgoing frame consistency; reversal
+   and timestep subdivision; exact/near vertex hits; edge-aligned motion;
+   boundary edges/corners; nonorientable seams. Audit fan traversal assumptions
+   and ensure step-budget failures are exposed. Preserve speed without
+   forces/damping and retain the correct crossing sequence.
+2. **Build the shortest-path solver independently.** Start with valid
+   manifold triangle meshes (closed or with boundary), arbitrary face/edge/
+   vertex endpoints, and explicit disconnected/invalid-input results.
+   Nonorientable meshes must use local adjacency, not assume a global
+   orientation; verify Möbius cases before claiming support. General
+   nonmanifold junctions and abstract quotient atlases need separate contracts.
+3. **Wire every consumer together.** Replace distance/log queries, force
+   cutoffs and nearest-neighbour ranking, springs, and connections; retain
+   straightest tracing for integration. Resolve cut-locus/boundary policies
+   before switching dynamics. No invisible approximate fallback.
+4. **Verify geometry, then benchmark.** Plane and cube hand-unfolding cases;
+   cylinder wraparound; sphere non-antipodal and antipodal routes; saddle
+   paths with unequal angles; boundary shortest paths without billiard
+   reflection; disconnected meshes; and bunny face-interior endpoints.
+   Check both endpoints intrinsically (not just coincident 3D coordinates),
+   containment of every segment, straightness across ordinary unfolded
+   crossings, the vertex angle inequalities, reversal symmetry, and length.
+   Endpoint/straightness tests alone do not certify global optimality:
+   compare against analytic cases and an independent exact implementation.
+   Test force directions against finite differences of the same distance
+   energy away from cut loci. Check path-length/force/display agreement.
+
+For numerical tests, normalize by a characteristic mesh length and declare
+tolerances before accepting results (initial target: `1e-6` relative length/
+endpoint error and `1e-6` radians ordinary-crossing residual on well-conditioned
+fixtures). Use absolute-plus-relative tolerances near zero. Smooth-sphere arc
+error is a **separate mesh-approximation test** under refinement, not the
+numerical tolerance for an exact polyhedral solver. Near-antipodal branch
+choices and near-singular triangles require dedicated cases, not relaxed
+tolerances that hide failures.

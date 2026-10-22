@@ -6,26 +6,36 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
 
 ## 1. Theory we stand on
 
-- **Polthier, K., Schmies, M.** — _Straightest Geodesics on Polyhedral
+- <a id="straightest-geodesics"></a>**Polthier, K., Schmies, M.** — _Straightest Geodesics on Polyhedral
   Surfaces_. Mathematical Visualization (1998) and SIGGRAPH 2006 Courses
   "Discrete Differential Geometry", pp. 30–38.
   <https://dl.acm.org/doi/10.1145/1185657.1185664> ★ (both versions in
-  `../REFERENCES/`). The tracing primitive: unique straightest continuation,
-  parallel transport, discrete Runge–Kutta on polyhedra.
+  `../REFERENCES/`).
+  [Author abstract and preprint](https://page.mi.fu-berlin.de/polthier/articles/straightest/straightest_abstract.html).
+  The tracing primitive: unique straightest continuation, discrete parallel
+  transport, discrete Runge–Kutta on polyhedra. Distinguishes straightest
+  from locally shortest at cone vertices; not a global endpoint-path solver.
 - **Crane, K.** — _Discrete Differential Geometry: An Applied Introduction_
   (CMU course notes). <https://www.cs.cmu.edu/~kmcrane/Projects/DDG/> ★ The
   modern textbook: angle defect = Gaussian curvature, Gauss–Bonnet, discrete
   exterior calculus.
-- **Sharp, N., Crane, K.** — _You Can Find Geodesic Paths in Triangle Meshes
+- <a id="flipout"></a>**Sharp, N., Crane, K.** — _You Can Find Geodesic Paths in Triangle Meshes
   by Just Flipping Edges_ (FlipOut), SIGGRAPH Asia 2020.
   <https://nmwsharp.com/research/flip-geodesics/> ★ Geodesic _shortening_ by
   intrinsic edge flips (reference for a later "straighten this stroke").
-- **Mitchell, Mount, Papadimitriou** — _The Discrete Geodesic Problem_, SIAM
-  J. Comput. 16(4), 1987. Exact polyhedral shortest paths (MMP).
-- **Crane, Weischedel, Wardetzky** — _Geodesics in Heat_, ACM TOG 2013.
+  Produces locally shortest paths, not a general guarantee of global
+  shortestness. Intrinsic edges can cross original face interiors.
+- <a id="mmp"></a>**Mitchell, J. S. B., Mount, D. M., Papadimitriou, C. H.** —
+  _The Discrete Geodesic Problem_, SIAM J. Comput. 16(4), 647–668, 1987.
+  <https://doi.org/10.1137/0216045>.
+  [Paper PDF](https://www.cs.jhu.edu/~misha/ReadingSeminar/Papers/Mitchell87.pdf).
+  Exact polyhedral shortest paths (MMP / continuous Dijkstra); algorithm
+  reference for the proposed JS solver in [GEODESIC_MOTION.md §17](GEODESIC_MOTION.md#17-proposed-solution-without-geometry-central).
+- <a id="heat-method"></a>**Crane, Weischedel, Wardetzky** — _Geodesics in Heat_, ACM TOG 2013.
   <https://www.cs.cmu.edu/~kmcrane/Projects/HeatMethod/> Approximate
   distance fields from two linear solves.
 - **Sharp, Soliman, Crane** — _The Vector Heat Method_, ACM TOG 2019.
+  <https://www.cs.cmu.edu/~kmcrane/Projects/VectorHeatMethod/>.
   Parallel transport and log maps at scale; geodesic centroidal Voronoi.
 - **Schmidt, R., Grimm, C., Wyvill, B.** — _Interactive Decal Compositing with
   Discrete Exponential Maps_, SIGGRAPH 2006.
@@ -62,7 +72,7 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
   curvature and defects_, Adv. Phys. 2009 (defects forced by curvature —
   the D1 lattice).
 
-## 2. Software we learned from (not dependencies)
+## 2. Software references and adapter dependencies
 
 ### Cell layouts and connectivity optimization (research directions)
 
@@ -84,13 +94,55 @@ the starred items live outside the repo in `../REFERENCES/` (not committed).
 
 ### Existing software references
 
-- **geometry-central** (Sharp, Crane et al.) — <https://geometry-central.net>.
+- <a id="geometry-central"></a>**geometry-central** (Sharp, Crane et al.) — <https://geometry-central.net>.
   Production-grade intrinsic geometry on halfedge meshes; our API vocabulary
   (`traceGeodesic`, `logMap`, `SurfacePoint`) is borrowed from it. See
-  `MANIFOLD_DISPLAY_IDEA.md` for the algorithm map.
+  [MANIFOLD_DISPLAY_IDEA.md](MANIFOLD_DISPLAY_IDEA.md) for the algorithm map.
+  Its [exact distance/path API](https://geometry-central.net/surface/algorithms/geodesic_distance/)
+  wraps Kirsanov's MMP implementation and supports face-interior source/query
+  points and path extraction. Its
+  [FlipOut API](https://geometry-central.net/surface/algorithms/flip_geodesics/)
+  is a different operation: local path shortening. Reference only; no
+  geometry-central dependency is proposed for the JS milestone.
+- <a id="kirsanov-geodesic"></a>**Danil Kirsanov's geodesic library** —
+  [original project archive](https://code.google.com/archive/p/geodesic/).
+  Standalone C++ exact MMP implementation, not dependent on geometry-central.
+  [libigl's maintained source copy](https://github.com/libigl/libigl/blob/main/include/igl/exact_geodesic.cpp)
+  identifies the original 2008 code as MIT-licensed; the surrounding libigl
+  file also carries MPL-2.0 notices. Inspect the selected revision and
+  components before reuse. A reference/test oracle or possible future
+  standalone WASM backend, not a newly installed dependency.
+- <a id="cgal-shortest-path"></a>**CGAL Surface Mesh Shortest Path** —
+  [package manual](https://doc.cgal.org/latest/Surface_mesh_shortest_path/index.html).
+  Exact endpoint shortest paths using Xin–Wang's improvement of Chen–Han;
+  arbitrary face-barycentric source/target points and path extraction.
+  Another independent algorithm/implementation reference, not a JS dependency.
 - **toxiclibs.js** (Verlet physics, used in myBlobChain) and **opentype.js**
   (glyph outlines) — the text-to-contours pipeline D2 reuses.
 - **three.js** — rendering in the demos only.
+- <a id="p5-adapters"></a>**p5.js addon and drawing APIs** —
+  [Creating libraries](https://p5js.org/contribute/creating_libraries/),
+  [createCanvas](https://p5js.org/reference/p5/createCanvas/),
+  [createGraphics](https://p5js.org/reference/p5/createGraphics/),
+  [loadFont](https://p5js.org/reference/p5/loadFont/),
+  [font.textToPaths](https://p5js.org/reference/p5.Font/textToPaths/).
+  The pilot uses `p5.registerAddon` and the per-sketch `remove` lifecycle hook,
+  tested on pinned **p5 2.3.4**
+  ([ES module](https://cdn.jsdelivr.net/npm/p5@2.3.4/lib/p5.esm.js)).
+  p5 is a dependency of the pilot preview only, not the geometry/state core.
+  A viewport and local graphics buffers are not themselves an intrinsic surface
+  canvas. [Pilot API and limits](../README.md#p5js-addon-pilot); full demo
+  migration remains separate.
+  Classic follow-up sketches reuse p5's raster shapes/text and font outline
+  extraction; only surface placement, clipping and transport are ours.
+- <a id="geomerative"></a>**Geomerative (Ricard Marxer)** —
+  <https://www.ricardmarxer.com/geomerative/>.
+  Processing/Java library exposing font and SVG geometry for creative coding;
+  an interface reference, not a directly compatible p5.js dependency.
+- <a id="adafruit-gfx"></a>**Adafruit_GFX** —
+  [library overview](https://learn.adafruit.com/adafruit-gfx-graphics-library/overview).
+  Shared Arduino graphics primitives with device-specific drivers; a reuse
+  target for a future small surface-canvas adapter, not a new dependency.
 
 ### Sample mesh: Stanford bunny
 
