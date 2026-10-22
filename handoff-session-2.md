@@ -19,7 +19,7 @@ This session clarified the overarching vision for **Native Manifold Displays** �
    - **No intermediate rectangular chart texture framebuffers are needed** to draw 2D primitives!
    - Instead, just as a modern 2D GPU draws a thick line by generating a thin bounding rectangle and computing each pixel's perpendicular distance to the mathematical segment in the fragment shader (rather than Bresenham), a **Native Manifold GPU** works in two stages:
      - **Manifold Geometry Stage:** Given an intrinsic primitive (e.g. a geodesic segment with origin $p_0 = (\text{faceId}_0, x_0, y_0)$, 2D chart unit tangent $\mathbf{d}_0 = (d_x, d_y)$, surface length $L$, and half-width $w$), traces/unfolds a thin bounding strip across chart seams $(M, t)$ and wakes up candidate manifold fragments in each overlapped chart.
-     - **Manifold Fragment Shader:** Evaluates the exact longitudinal projection $s(q)$ and **perpendicular geodesic distance** $d_\perp(q)$ (**Fermi coordinates**) or **Manifold Signed Distance Field (SDF)** (for geodesic circles, polygons, splines) directly at each fragment $q = (\text{faceId}, x, y)$, writing into the persistent **Manifold Framebuffer** (`emitterColor[k]` or barycentric *Mesh Colors* / *Ptex* grids or polygonal atlas tiles with seam gutters).
+     - **Manifold Fragment Shader:** Evaluates the exact longitudinal projection $s(q)$ and **perpendicular geodesic distance** $d_\perp(q)$ (**Fermi coordinates**) or **Manifold Signed Distance Field (SDF)** (for geodesic circles, polygons, splines) directly at each fragment $q = (\text{faceId}, x, y)$, writing into the persistent **Manifold Framebuffer** (`emitterColor[k]` or barycentric _Mesh Colors_ / _Ptex_ grids or polygonal atlas tiles with seam gutters).
    - **The "Curved Retina" (3D-to-Manifold Projection):** Generalizes OpenGL's flat projection plane to an arbitrarily shaped manifold display (per-chart off-axis perspective frusta for polyhedral displays; geometry tessellation or per-fragment ray-casting along $\mathbf{r}(p) = \text{normalize}(\mathbf{P}(p) - \mathbf{E})$ for curved retinas).
    - Full write-up: [docs/MANIFOLD_DISPLAY_IDEA.md](docs/MANIFOLD_DISPLAY_IDEA.md#architecture-of-a-native-manifold-rendering-pipeline--framebuffer).
 
@@ -55,29 +55,38 @@ This session clarified the overarching vision for **Native Manifold Displays** �
 ## 3. Next Steps (In Agreed Order)
 
 ### Phase 1 — Dedicated Paper & `p5.js` Library Documentation
+
 1. **Create `paper/NATIVE_MANIFOLD_DISPLAYS.md` (SIGGRAPH-style technical monograph):**
    - Consolidate and expand the theory, system architecture, and rendering pipeline into a clean, self-contained paper draft:
      - §1 Motivation & Vision (beyond flat rectangular framebuffers: emissive skins, polyhedral instruments, spatially distributed panels).
      - §2 Intrinsic Atlas & Transition Calculus (charts, rigid gluings $p' = M p + t$, non-orientable $\det M = -1$, discrete Gauss–Bonnet & cone deficits $\delta_v$).
-     - §3 The Native Manifold Rendering Pipeline ("Manifold GPU"): FBO-free primitive rasterization via thin geodesic bounding strips + Manifold Fragment Shader evaluating Fermi coordinates $(s, d_\perp)$ and Manifold SDFs; Manifold Framebuffer storage models (emitter arrays, barycentric *Mesh Colors*/*Ptex*, polygonal atlas tiles with seam gutters); rotated derivatives across seams; and the **Curved Retina** (3D-to-manifold projection).
-     - §4 Imprinting 2D Graphics on Curved Surfaces (*Theorema Egregium*, $K L^2$ scaling, Tissot indicatrix, Darboux frame $\kappa_g, \kappa_n, \tau_g$, and the 5 imprint constructions).
+     - §3 The Native Manifold Rendering Pipeline ("Manifold GPU"): FBO-free primitive rasterization via thin geodesic bounding strips + Manifold Fragment Shader evaluating Fermi coordinates $(s, d_\perp)$ and Manifold SDFs; Manifold Framebuffer storage models (emitter arrays, barycentric _Mesh Colors_/_Ptex_, polygonal atlas tiles with seam gutters); rotated derivatives across seams; and the **Curved Retina** (3D-to-manifold projection).
+     - §4 Imprinting 2D Graphics on Curved Surfaces (_Theorema Egregium_, $K L^2$ scaling, Tissot indicatrix, Darboux frame $\kappa_g, \kappa_n, \tau_g$, and the 5 imprint constructions).
      - §5 Intrinsic Physics, Agents & Cellular Automata.
      - §6 Hardware Realization (`cube_display` MCU fast paths) & Simulated 3D Screen Previews.
 2. **Create `p5-manifold/README.md` (`p5.js` Library Manual):**
    - Document the `p5-manifold` API, the distinction between native manifold rendering and the three simulated 3D screen-preview techniques (`to3D` vector lines, `p5.Graphics` local stamps, per-cell face buffers), limitations, and step-by-step examples.
 
 ### Phase 2 — Shared `p5-manifold` Capabilities for Full Demo Parity
+
 - Extend `p5-manifold` with:
   - Shared surface catalog (all 5 Platonic solids, torus, Möbius, paper Möbius, Klein bottle, cylinder, plane, Stanford bunny, plus `.obj`/`.stl` import).
   - Face coloring modes (plain, custom per-face RGBA for Life/sequencer, and scalar curvature fields $K, H, \delta_v$), feature-edge rendering with coplanarity angle threshold, and vertex deficit markers in `p5` WEBGL.
   - 3D mouse raycast picking (`display.pick(mouseX, mouseY)`) returning `{faceId, x, y, faceIndex}` in `p5` WEBGL.
   - All 4 `manifold-ink` contour modes (`turtle`, `exp`, `fermi`, `projection`) + closure-gap reporting in `display.contours(...)`.
 
-### Phase 3 — Port All Four Complete Demos to `p5.js`
-1. **`demos/p5-life/`:** Game of Life on quad grids + Stanford bunny triangle cells in `p5.js` (with `display.pick` click-to-toggle and cell borders).
-2. **`demos/p5-imprint/`:** Full `p5.js` version of Demo D2 (text, SVG, circle, grid, L-systems; `turtle` / `exp` / `fermi` / `projection` modes; closure gaps; interactive frame placement/nudging; plus `p5.Graphics` stamps).
-3. **`demos/p5-particles/`:** Full `p5.js` version of Demo D1 (geodesic motion, repulsion/annealing, trails, surface links, shift-click free geodesic, curvature coloring).
-4. **`demos/p5-sequencer/`:** `p5.js` version of the geodesic musical sequencer (moving heads, armed cells, WebAudio synth on cube, torus, twisted tubes, and Möbius strip).
+### Phase 3 — Full Suite of `p5.js` Demos (Simple Starters → Core Ports → Blobchain Clock → Sequencer)
+1. **Introductory Sketches (Completed):**
+   - **`demos/p5-hello/`:** Classic `setup()` / `draw()` hello-world with moving `p5.Graphics` shapes (`triangle`, `circle`, `rect`) folding across cube seams.
+   - **`demos/p5-gallery/`:** Moving circle on cube (`circle.js`), moving native `p5` text on torus (`text.js`), and `font.textToPaths` + generated SVG heart contours on torus (`svg.js`).
+   - **`demos/p5-pilot/`:** Dual instance-mode turtle-stroke & folded-rectangle regression demo.
+2. **`demos/p5-life/`:** Game of Life on quad grids + Stanford bunny triangle cells in `p5.js` (with `display.pick` click-to-toggle and cell borders).
+3. **`demos/p5-imprint/`:** Full `p5.js` version of Demo D2 (text, SVG, circle, grid, L-systems; `turtle` / `exp` / `fermi` / `projection` modes; closure gaps; interactive frame placement/nudging; plus `p5.Graphics` stamps).
+4. **`demos/p5-particles/`:** Full `p5.js` version of Demo D1 (geodesic motion, repulsion/annealing, trails, surface links, shift-click free geodesic, curvature coloring).
+5. **`demos/p5-blobchain-clock/` (M8 — Spring-Chain Lettering / Blobchain Clock on a Manifold):**
+   - Combines **text contour imprinting** (`manifold-ink`) with **intrinsic surface particles & springs** (`manifold-physics`): live clock digits (`HH:MM:SS`) or custom text imprinted onto the surface, where each glyph contour is a closed particle chain with planar rest lengths and soft anchors, relaxing and morphing intrinsically across surface seams when digits tick.
+6. **`demos/p5-sequencer/`:** `p5.js` version of the geodesic musical sequencer (moving heads, armed cells, WebAudio synth on cube, torus, twisted tubes, and Möbius strip).
 
 ### Untracked files to leave alone
+
 - `demos/moebius_3D_surface.obj` and `demos/moebius_3D_surface_obj.zip` remain untracked unless requested.

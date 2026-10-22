@@ -46,6 +46,13 @@ See [the motivation and adapter strategy](docs/LIBRARY_PLAN.md#21-motivation-the
   explicit placement frames and seam-preserving turtle traces.
 - `p5-manifold/` — experimental p5 2.3.4 addon, registered explicitly with
   `p5.registerAddon(manifoldAddon)`. No p5 dependency enters the pure libraries.
+  See the dedicated [`p5-manifold/README.md`](p5-manifold/README.md) manual.
+- `paper/` — [`paper/NATIVE_MANIFOLD_DISPLAYS.md`](paper/NATIVE_MANIFOLD_DISPLAYS.md),
+  the SIGGRAPH-style technical monograph covering the intrinsic atlas, the
+  FBO-free Native Manifold GPU pipeline (geodesic bounding strips, Fermi
+  coordinate fragment shaders, Manifold SDFs, and the Curved Retina), 2D
+  imprinting, intrinsic physics, hardware fast paths, and simulated 3D screen
+  previews.
 - `demos/p5-pilot/` — two independent p5 WEBGL sketches: a stroke wrapping
   around a cube and a folded rectangle. Serve the repo as below and open
   `http://localhost:8001/demos/p5-pilot/`.
